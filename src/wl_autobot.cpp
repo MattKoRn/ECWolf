@@ -10,6 +10,7 @@
 #include <cmath>
 #include <climits>
 #include <cstring>
+#include <cstdio>
 #include <cstdlib>
 #include <vector>
 
@@ -43,6 +44,8 @@ namespace
 	const unsigned int DOOR_BLOCK_TICS = 70 * 20;
 	const unsigned int DOOR_MAX_ATTEMPTS = 3;
 
+	FILE *botLog = NULL;
+
 	int episodeIndex = -1;
 	int selectedDifficulty = gd_easy;
 
@@ -52,7 +55,9 @@ namespace
 			stuck(0), lastPositionTick(0), lastX(0), lastY(0),
 			usedEmergencyNoclip(false), originalNoclip(false),
 			emergencyUntil(0), noGoalTicks(0), detours(0),
-			failedRecoveryTicks(0), waypoint(-1)
+			failedRecoveryTicks(0), waypoint(-1), liveEnemies(0),
+			lastWeaponTick(0), lastGoalTile(-1), lastGoalPriority(-1),
+			lastGoalLogTick(0)
 		{
 			mapName[0] = '\0';
 		}
@@ -66,6 +71,8 @@ namespace
 		std::vector<unsigned char> visited;
 		std::vector<unsigned int> blockedCellUntil;
 		std::vector<unsigned char> deathDanger;
+		std::vector<unsigned char> threat;
+		std::vector<unsigned int> exitAttempts;
 		std::vector<unsigned int> exitRetryAfter;
 		std::vector<unsigned char> usedSwitch;
 		std::vector<unsigned int> blockedDoorUntil;
@@ -77,17 +84,31 @@ namespace
 		unsigned int noGoalTicks;
 		unsigned int detours, failedRecoveryTicks;
 		int waypoint;
+		unsigned int liveEnemies, lastWeaponTick;
+		int lastGoalTile, lastGoalPriority;
+		unsigned int lastGoalLogTick;
 		char mapName[9];
 	} memory;
 
 	// Death danger survives an engine-native respawn; world state never does.
 	struct FailureHistory
 	{
-		FailureHistory() : deaths(0) { mapName[0] = 0; }
+		FailureHistory() : deaths(0), detours(0), failedExits(0),
+			noGoals(0) { mapName[0] = 0; }
 		char mapName[9];
-		unsigned int deaths;
+		unsigned int deaths, detours, failedExits, noGoals;
 		std::vector<unsigned char> danger;
 	} failures;
+
+	void LogEvent(const char *event, const char *detail, int x = -1, int y = -1)
+	{
+		if(!botLog) return;
+		std::fprintf(botLog,
+			"event=%s map=%s tic=%u x=%d y=%d detail=%s deaths=%u detours=%u exit_failures=%u no_goals=%u\n",
+			event, memory.mapName, memory.ticks, x, y, detail,
+			failures.deaths, failures.detours, failures.failedExits, failures.noGoals);
+		std::fflush(botLog);
+	}
 
 	struct Goal
 	{
@@ -156,6 +177,8 @@ namespace
 		memory.doorAttempts.resize(header.width * header.height, 0);
 		memory.blockedCellUntil.resize(header.width * header.height, 0);
 		memory.exitRetryAfter.resize(header.width * header.height, 0);
+		memory.exitAttempts.resize(header.width * header.height, 0);
+		memory.threat.resize(header.width * header.height, 0);
 		if(std::strncmp(failures.mapName, gamestate.mapname, 9) == 0 &&
 			failures.danger.size() == header.width * header.height)
 			memory.deathDanger = failures.danger;
@@ -165,6 +188,7 @@ namespace
 		memory.lastY = pawn->y;
 		Printf("Autoplayer: map %s (%ux%u).\n",
 			gamestate.mapname, header.width, header.height);
+		LogEvent("map_start", "native_level", pawn->tilex, pawn->tiley);
 	}
 
 
@@ -224,6 +248,34 @@ namespace
 		Printf("Autoplayer: obstruction (%d,%d) did not open; replanning.\n",
 			tile % static_cast<int>(memory.width),
 			tile / static_cast<int>(memory.width));
+		LogEvent("blocked_obstacle", "open_timeout",
+			tile % static_cast<int>(memory.width),
+			tile / static_cast<int>(memory.width));
+	}
+
+	void UpdateThreatMap()
+	{
+		std::fill(memory.threat.begin(), memory.threat.end(), 0);
+		memory.liveEnemies = 0;
+		for(AActor::Iterator actor = AActor::GetIterator().Next(); actor; actor.Next())
+		{
+			if(actor->player || !(actor->flags & FL_ISMONSTER) ||
+				!(actor->flags & FL_SHOOTABLE) || actor->health <= 0 ||
+				!Inside(actor->tilex, actor->tiley))
+				continue;
+			++memory.liveEnemies;
+			for(int dy = -4; dy <= 4; ++dy)
+			for(int dx = -4; dx <= 4; ++dx)
+			{
+				const int x = actor->tilex + dx, y = actor->tiley + dy;
+				if(!Inside(x, y)) continue;
+				unsigned char &level = memory.threat[Index(x, y)];
+				const unsigned int increase = AutobotPolicy::LocalThreat(dx, dy,
+					static_cast<unsigned int>(actor->health));
+				level = static_cast<unsigned char>(std::min(12U,
+					static_cast<unsigned int>(level) + increase));
+			}
+		}
 	}
 
 	struct BotRouteCost
@@ -239,7 +291,9 @@ namespace
 			const bool closed = spot->tile &&
 				spot->slideAmount[0] != 0xffff &&
 				spot->slideAmount[1] != 0xffff;
-			return AutobotPolicy::TravelCost(closed, memory.deathDanger[to]);
+			return AutobotPolicy::ThreatAwareCost(
+				closed, !!spot->thinker, spot->pushAmount != 0,
+				memory.deathDanger[to], memory.threat[to], pawn->health < 50);
 		}
 		APlayerPawn *pawn;
 		int width;
@@ -721,6 +775,7 @@ void Bot_Update(TicCmd_t &cmd)
 	APlayerPawn *pawn = players[ConsolePlayer].mo;
 	ResetForCurrentMap(pawn);
 	++memory.ticks;
+	UpdateThreatMap();
 
 	cmd.controlx = cmd.controly = cmd.controlstrafe = 0;
 	cmd.controlpanx = cmd.controlpany = 0;
