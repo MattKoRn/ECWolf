@@ -44,6 +44,7 @@
 #include "thingdef/thingdef_expression.h"
 #include "wl_agent.h"
 #include "wl_game.h"
+#include "wl_rpg.h"
 #include "wl_loadsave.h"
 #include "wl_net.h"
 #include "wl_state.h"
@@ -222,6 +223,7 @@ void AActor::Destroy()
 static FRandom pr_dropitem("DropItem");
 void AActor::Die()
 {
+	RPG::OnEnemyDeath(this);
 	if(target && target->player)
 		target->player->GivePoints(points);
 	else if(points)
@@ -697,6 +699,7 @@ AActor *AActor::Spawn(const ClassDef *type, fixed x, fixed y, fixed z, int flags
 	if(actor->ObjectFlags & OF_EuthanizeMe)
 		return NULL;
 
+	RPG::OnEnemySpawn(actor);
 	if(actor->flags & FL_COUNTKILL)
 		++gamestate.killtotal;
 	if(actor->flags & FL_COUNTITEM)
