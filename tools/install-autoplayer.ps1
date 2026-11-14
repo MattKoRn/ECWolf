@@ -2,6 +2,8 @@
 param(
     [string] $GameDataPath = "",
     [string] $InstallRoot = "",
+    [string] $ShortcutName = "ECWolf Autoplayer",
+    [string] $ShortcutDescription = "ECWolf with F12 Autoplayer",
     [switch] $Reconfigure
 )
 
@@ -174,15 +176,15 @@ if (-not $desktop) {
     throw "Unable to locate the Windows desktop folder."
 }
 $shell = New-Object -ComObject WScript.Shell
-$shortcut = $shell.CreateShortcut((Join-Path $desktop "ECWolf Autoplayer.lnk"))
+$shortcut = $shell.CreateShortcut((Join-Path $desktop "$ShortcutName.lnk"))
 $shortcut.TargetPath = $exe
 $shortcut.WorkingDirectory = Split-Path $exe -Parent
 $shortcut.IconLocation = "$exe,0"
-$shortcut.Description = "ECWolf with F12 Autoplayer"
+$shortcut.Description = $ShortcutDescription
 $shortcut.Save()
 
 Write-Host ""
 Write-Host "Installation complete: $exe" -ForegroundColor Green
-Write-Host "Desktop shortcut: ECWolf Autoplayer.lnk"
+Write-Host "Desktop shortcut: $ShortcutName.lnk"
 Write-Host "Launch ECWolf with your legally owned Wolf3D/Spear game data."
 Write-Host "In a running single-player level, press F12 or enable Autoplayer in Controls."
