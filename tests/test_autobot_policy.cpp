@@ -1,4 +1,8 @@
 #include "../src/wl_autobot_policy.h"
+// CI builds in Release; keep assertion-based regressions active under NDEBUG.
+#ifdef NDEBUG
+#undef NDEBUG
+#endif
 #include <cassert>
 #include <vector>
 #include <climits>
