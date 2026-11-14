@@ -158,10 +158,20 @@ namespace AutobotPolicy
 		return StrafeDirection(ticks, positiveClear, negativeClear);
 	}
 
+	// Knife/punch attacks should enter and STAY in actual striking range.
+	// A_CustomPunch typically reaches about one tile; close in further
+	// rather than stepping backwards as the previous ranged logic did.
+	inline int MeleeApproachSpeed(double distanceTiles)
+	{
+		if(distanceTiles > 1.0) return -68;
+		if(distanceTiles > 0.70) return -35;
+		return 0;
+	}
+
 	inline bool ShouldShoot(double distanceTiles, bool melee)
 	{
-		// Avoid long-range ammo waste; melee only when the enemy is in reach.
-		return distanceTiles <= (melee ? 1.3 : 5.5);
+		// A little margin below engine melee range avoids whiffing.
+		return distanceTiles <= (melee ? 1.05 : 5.5);
 	}
 }
 
