@@ -9,6 +9,7 @@
 #include <cmath>
 #include <climits>
 #include <cstring>
+#include <cstdlib>
 #include <queue>
 #include <vector>
 
@@ -38,6 +39,10 @@ namespace
 	const int DIRX[4] = { 1, 0, -1, 0 };
 	const int DIRY[4] = { 0, -1, 0, 1 };
 	const int ANGLE_SCALE = 20; // Matches ControlMovement in wl_agent.cpp.
+	const unsigned int DOOR_RETRY_TICS = 70;
+	const unsigned int DOOR_OPEN_TIMEOUT = 70 * 5;
+	const unsigned int DOOR_BLOCK_TICS = 70 * 20;
+	const unsigned int DOOR_MAX_ATTEMPTS = 3;
 
 	int episodeIndex = -1;
 	int selectedDifficulty = gd_easy;
@@ -65,6 +70,10 @@ namespace
 		fixed lastX, lastY;
 		std::vector<unsigned char> visited;
 		std::vector<unsigned char> usedSwitch;
+		std::vector<unsigned int> blockedDoorUntil;
+		std::vector<unsigned int> doorLastUse;
+		std::vector<unsigned int> doorWaitSince;
+		std::vector<unsigned char> doorAttempts;
 		bool usedEmergencyNoclip, originalNoclip;
 		unsigned int emergencyUntil;
 		unsigned int nextSave;
@@ -126,6 +135,10 @@ namespace
 		memory.height = header.height;
 		memory.visited.resize(header.width * header.height, 0);
 		memory.usedSwitch.resize(header.width * header.height, 0);
+		memory.blockedDoorUntil.resize(header.width * header.height, 0);
+		memory.doorLastUse.resize(header.width * header.height, 0);
+		memory.doorWaitSince.resize(header.width * header.height, 0);
+		memory.doorAttempts.resize(header.width * header.height, 0);
 		memory.lastX = pawn->x;
 		memory.lastY = pawn->y;
 		reloadRequested = false;
@@ -141,31 +154,57 @@ namespace
 			gamestate.mapname, header.width, header.height);
 	}
 
-	bool CanEnter(int x, int y, APlayerPawn *pawn)
+
+	bool CanEnter(int x, int y, int fromX, int fromY, APlayerPawn *pawn)
 	{
 		if(!Inside(x, y))
 			return false;
+		if(noclip)
+			return true;
 
 		MapSpot spot = map->GetSpot(x, y, 0);
 		if(!spot->tile)
 			return true;
 
-		// Existing sliding doors remain part of the map even when opened.
+		// Open sliding doors retain their tile. Do not accidentally close them.
 		if(spot->slideAmount[0] == 0xffff ||
 			spot->slideAmount[1] == 0xffff)
 			return true;
+		const int tile = Index(x, y);
+		if(memory.blockedDoorUntil[tile] > memory.ticks)
+			return false;
+
+		// Cmd_Use only acts on an adjacent tile from a permitted cardinal side.
+		MapTrigger::Side side;
+		if(x > fromX) side = MapTrigger::West;
+		else if(x < fromX) side = MapTrigger::East;
+		else if(y > fromY) side = MapTrigger::North;
+		else if(y < fromY) side = MapTrigger::South;
+		else return false;
 
 		for(unsigned int t = 0; t < spot->triggers.Size(); ++t)
 		{
 			const MapTrigger &trig = spot->triggers[t];
-			if(!DoorSpecial(trig.action))
+			if(!DoorSpecial(trig.action) || !trig.playerUse ||
+				(!trig.active && !trig.repeatable) || !trig.activate[side])
 				continue;
-			// Exclude locked doors until the actual key is in inventory.
 			if(trig.arg[3] && !P_CheckKeys(pawn, trig.arg[3], true))
 				continue;
 			return true;
 		}
 		return false;
+	}
+
+	void BlockDoor(int tile)
+	{
+		memory.blockedDoorUntil[tile] = memory.ticks + DOOR_BLOCK_TICS;
+		memory.doorAttempts[tile] = 0;
+		memory.doorLastUse[tile] = 0;
+		memory.doorWaitSince[tile] = 0;
+		memory.stuck = 0;
+		Printf("Autoplayer: door (%d,%d) did not open; trying another route.\n",
+			tile % static_cast<int>(memory.width),
+			tile / static_cast<int>(memory.width));
 	}
 
 	void Consider(Goal &best, const std::vector<int> &dist,
@@ -259,7 +298,7 @@ namespace
 			{
 				const int nx = x + DIRX[dir];
 				const int ny = y + DIRY[dir];
-				if(!Inside(nx, ny) || !CanEnter(nx, ny, pawn))
+				if(!Inside(nx, ny) || !CanEnter(nx, ny, x, y, pawn))
 					continue;
 				const int next = Index(nx, ny);
 				if(distance[next] >= 0)
@@ -357,17 +396,37 @@ namespace
 		while(parent[next] != -1 && parent[next] != start)
 			next = parent[next];
 
+
 		if(best.walk == start && best.use >= 0)
 		{
 			const int ux = best.use % w;
 			const int uy = best.use / w;
+			MapSpot useSpot = map->GetSpot(ux, uy, 0);
+			bool canUse = false;
+			bool isExit = false;
+			// Scripted switches may change/remove their triggers after activation.
+			for(unsigned int t = 0; t < useSpot->triggers.Size(); ++t)
+			{
+				const MapTrigger &trig = useSpot->triggers[t];
+				if(!trig.playerUse || (!trig.active && !trig.repeatable) ||
+					(!ExitSpecial(trig.action) &&
+						(memory.usedSwitch[best.use] || DoorSpecial(trig.action))))
+					continue;
+				canUse = true;
+				if(ExitSpecial(trig.action)) isExit = true;
+			}
+			if(!canUse)
+			{
+				memory.usedSwitch[best.use] = 1;
+				return;
+			}
 			const fixed tx = (ux << TILESHIFT) + FRACUNIT / 2;
 			const fixed ty = (uy << TILESHIFT) + FRACUNIT / 2;
 			if(TurnToward(pawn, cmd, tx, ty, 10) &&
 				(memory.ticks % 18) == 0)
 			{
 				cmd.buttonstate[bt_use] = true;
-				if(!ExitSpecial(map->GetSpot(ux, uy, 0)->triggers[0].action))
+				if(!isExit)
 					memory.usedSwitch[best.use] = 1;
 			}
 			return;
@@ -380,16 +439,40 @@ namespace
 		if(!TurnToward(pawn, cmd, x, y, 14))
 			return;
 
+
 		MapSpot spot = map->GetSpot(tx, ty, 0);
 		if(spot->tile && !noclip)
 		{
-			// Re-press Use occasionally: locked doors and timed doors need
-			// a fresh button edge. Wait until a door is passable.
-			if((memory.ticks % 18) == 0)
+			// One Use edge starts the door. Repeated Use reverses a moving door.
+			// Collision still requires the door to be fully open (0xffff).
+			if(spot->slideAmount[0] != 0xffff &&
+				spot->slideAmount[1] != 0xffff)
+			{
+				if(spot->thinker)
+				{
+					if(!memory.doorWaitSince[next])
+						memory.doorWaitSince[next] = memory.ticks;
+					if(memory.ticks - memory.doorWaitSince[next] > DOOR_OPEN_TIMEOUT)
+						BlockDoor(next);
+					return;
+				}
+				memory.doorWaitSince[next] = 0;
+				if(memory.doorLastUse[next] &&
+					memory.ticks - memory.doorLastUse[next] < DOOR_RETRY_TICS)
+					return;
+				if(memory.doorAttempts[next] >= DOOR_MAX_ATTEMPTS)
+				{
+					BlockDoor(next);
+					return;
+				}
 				cmd.buttonstate[bt_use] = true;
-			if(spot->slideAmount[0] < 0xc000 &&
-				spot->slideAmount[1] < 0xc000)
+				memory.doorLastUse[next] = memory.ticks;
+				++memory.doorAttempts[next];
 				return;
+			}
+			memory.doorAttempts[next] = 0;
+			memory.doorLastUse[next] = 0;
+			memory.doorWaitSince[next] = 0;
 		}
 
 		// Slow down close to a waypoint to avoid corner clipping.
@@ -443,13 +526,24 @@ namespace
 			cmd.controly = 0;
 	}
 
-	void Recovery(APlayerPawn *pawn, bool attacking)
+
+	void Recovery(APlayerPawn *pawn, bool tryingToMove)
 	{
-		if(memory.ticks - memory.lastPositionTick >= 70)
+		// Waiting for a door/switch or searching for a route is not a collision.
+		// Reloading the checkpoint here can reproduce the same door loop.
+		if(!tryingToMove)
 		{
-			const int moved = abs(pawn->x - memory.lastX) +
-				abs(pawn->y - memory.lastY);
-			if(moved < FRACUNIT / 4 && !attacking)
+			memory.stuck = 0;
+			memory.lastX = pawn->x;
+			memory.lastY = pawn->y;
+			memory.lastPositionTick = memory.ticks;
+		}
+		else if(memory.ticks - memory.lastPositionTick >= 70)
+		{
+			const long long moved =
+				std::llabs(static_cast<long long>(pawn->x) - memory.lastX) +
+				std::llabs(static_cast<long long>(pawn->y) - memory.lastY);
+			if(moved < FRACUNIT / 4)
 				memory.stuck += 70;
 			else
 				memory.stuck = 0;
@@ -567,7 +661,7 @@ void Bot_Update(TicCmd_t &cmd)
 	Fight(pawn, cmd, target);
 	if(!target)
 		Navigate(pawn, cmd);
-	Recovery(pawn, target);
+	Recovery(pawn, !target && (cmd.controly != 0 || cmd.controlstrafe != 0));
 }
 
 bool Bot_WantsReload()
@@ -591,6 +685,7 @@ bool Bot_ReloadCheckpoint()
 		return false;
 	}
 	Printf("Autoplayer: restored checkpoint (attempt %d/3).\n", reloadCount);
+	memory.seenMap = NULL;
 	loadedgame = true;
 	return true;
 }
