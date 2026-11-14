@@ -523,8 +523,14 @@ namespace
 			memory.lastGoalPriority != best.priority) &&
 			(memory.ticks - memory.lastGoalLogTick >= 70))
 		{
-			LogEvent("goal", "new_objective",
-				best.walk % w, best.walk / w);
+			const char *reason = best.priority == 0 ? "key" :
+				best.priority == 1 ? "urgent_supply" :
+				best.priority == 2 ? "exit" :
+				best.priority == 3 ? "switch" :
+				best.priority == 4 ? "enemy" :
+				best.priority == 5 ? "deferred_exit" :
+				best.priority == 6 ? "supply" : "exploration";
+			LogEvent("goal", reason, best.walk % w, best.walk / w);
 			memory.lastGoalTile = best.walk;
 			memory.lastGoalPriority = best.priority;
 			memory.lastGoalLogTick = memory.ticks;
@@ -697,7 +703,9 @@ namespace
 		if(bestSlot < 0) return false;
 		cmd.buttonstate[bestSlot == 0 ? bt_slot0 : bt_slot1 + bestSlot - 1] = true;
 		memory.lastWeaponTick = memory.ticks;
-		LogEvent("weapon_select", "higher_utility", pawn->tilex, pawn->tiley);
+		char slotName[20];
+		std::snprintf(slotName, sizeof(slotName), "slot_%d", bestSlot);
+		LogEvent("weapon_select", slotName, pawn->tilex, pawn->tiley);
 		return true;
 	}
 
