@@ -27,6 +27,7 @@
 #include "wl_draw.h"
 #include "wl_net.h"
 #include "wl_play.h"
+#include "wl_autobot.h"
 #include "wl_game.h"
 #include "wl_text.h"
 #include "a_inventory.h"
@@ -822,6 +823,10 @@ restartgame:
 		dointermission = true;
 
 		PlayLoop ();
+
+		// A death can be rolled back without re-entering the game menu.
+		if(playstate == ex_died)
+			Bot_ReloadCheckpoint();
 
 		if(playstate == ex_victorious)
 		{
