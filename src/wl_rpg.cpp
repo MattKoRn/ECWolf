@@ -7,6 +7,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cerrno>
 #include <cstdio>
 #include <cstdlib>
 #include <ctime>
@@ -29,6 +30,7 @@
 #include "wl_def.h"
 #include "wl_agent.h"
 #include "wl_game.h"
+#include "wl_play.h"
 #include "wl_menu.h"
 #include "wl_net.h"
 #include "actor.h"
@@ -192,7 +194,7 @@ unsigned long long Now() {
 }
 bool CreateDirectory(const std::string &path) {
 #ifdef _WIN32
-    return _mkdir(path.c_str()) == 0 || GetLastError() == ERROR_ALREADY_EXISTS;
+    return _mkdir(path.c_str()) == 0 || errno == EEXIST;
 #else
     return mkdir(path.c_str(), 0700) == 0 || errno == EEXIST;
 #endif
