@@ -78,6 +78,29 @@ treating this as production-ready. Inspect the GitHub Actions runs for
 build diagnostics. A Windows machine with the toolchain and licensed game
 data is required to validate gameplay.
 
+## Combat and death regression checks
+
+The bot pulses Attack for weapons with `NOAUTOFIRE` (such as the Wolf3D
+pistol), while holding Attack for fully automatic weapons. This avoids
+a pistol firing once and then waiting forever for a button release.
+
+Checkpoint saving and restoration are deferred to frame boundaries in
+`PlayLoop`, never performed inside a thinker tick or during the GameLoop
+death transition. With a valid checkpoint, an auto-player death triggers
+a restoration (up to three retries per map). Without a checkpoint, or
+after exhausting retries, the game follows its normal death/respawn rules.
+
+Manual test scenarios to validate on a machine with licensed game data:
+
+1. Equip the pistol; confirm repeated shots against a living visible enemy.
+2. Equip an automatic weapon; confirm continuous fire while a target is visible.
+3. Die before the first checkpoint; confirm the normal death screen/respawn.
+4. Die after a checkpoint; confirm one restoration and continued navigation.
+5. Die repeatedly beyond the retry budget; confirm normal death handling.
+6. Stop and resume the bot during death, and change levels after a recovery.
+
+These are regression scenarios, not a claim of an automated full playthrough.
+
 ## Recovery / troubleshooting
 
 - If the game reports missing data: provide the original game's data files
