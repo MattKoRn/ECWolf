@@ -14,7 +14,8 @@ void Bot_Update(TicCmd_t &cmd);
 void Bot_NewGame(const FString &startMap, int difficulty);
 bool Bot_AdvanceEpisode();
 
-// Called from safe play-loop/game-loop boundaries, not from thinker iteration.
+// Called from PlayLoop between frames; never save/load inside thinker or input ticks.
+void Bot_SaveCheckpoint();
 bool Bot_WantsReload();
 bool Bot_ReloadCheckpoint();
 
