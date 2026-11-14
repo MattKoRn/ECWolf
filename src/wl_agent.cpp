@@ -307,7 +307,10 @@ void player_t::TakeDamage (int points, AActor *attacker)
 	if (gamestate.victoryflag)
 		return;
 	points = RPG::IncomingDamage(points, attacker);
-	points = (points*gamestate.difficulty->DamageFactor)>>FRACBITS;
+	// Scale in 64 bits so high-level enemy damage cannot overflow fixed math.
+	int64_t scaledDamage = (static_cast<int64_t>(points) * gamestate.difficulty->DamageFactor) >> FRACBITS;
+	if(scaledDamage > 100000000) scaledDamage = 100000000;
+	points = static_cast<int>(scaledDamage);
 	NetDPrintf("%s %d points\n", __FUNCTION__, points);
 
 	if (!godmode)
