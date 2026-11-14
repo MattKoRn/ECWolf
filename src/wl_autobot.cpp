@@ -721,7 +721,7 @@ bool Bot_ResumeAfterDeath()
 	reloadRequested = false;
 	players[ConsolePlayer].state = player_t::PST_ENTER;
 	playstate = ex_died;
-	Printf("Autoplayer: no usable checkpoint; restarting via normal death flow.\\n");
+	Printf("Autoplayer: no usable checkpoint; restarting via normal death flow.\n");
 	return true;
 }
 
