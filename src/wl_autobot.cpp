@@ -393,7 +393,7 @@ namespace
 			{
 				const int nx = actor->tilex + DIRX[dir];
 				const int ny = actor->tiley + DIRY[dir];
-				if(Inside(nx, ny))
+				if(Inside(nx, ny) && Index(nx, ny) != start)
 					Consider(best, distance, Index(nx, ny), -1, 4);
 			}
 		}
