@@ -19,6 +19,8 @@ args = sys.argv
 log = pathlib.Path(args[args.index('--autoplay-log') + 1])
 with log.open('w', encoding='utf-8') as stream:
     stream.write('event=map_start map=MAP01 tic=1\\n')
+    stream.write('event=failure detail=movement_obstruction\\n')
+    stream.write('event=failure detail=player_death\\n')
     stream.flush()
     if '--simulate-timeout' in args:
         time.sleep(10)
@@ -56,6 +58,8 @@ class HarnessTests(unittest.TestCase):
         self.assertEqual(result["status"], "completed")
         self.assertEqual(result["map_starts"], 1)
         self.assertEqual(result["events"].get("campaign_complete"), 1)
+        self.assertEqual(result["deaths"], 1)
+        self.assertEqual(result["events"].get("failure"), 2)
 
     def test_does_not_accept_stale_success(self):
         out = self.root / "reports"
