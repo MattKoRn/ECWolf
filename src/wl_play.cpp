@@ -24,6 +24,7 @@
 #include "wl_inter.h"
 #include "wl_net.h"
 #include "wl_play.h"
+#include "wl_autobot.h"
 #include "g_mapinfo.h"
 #include "a_inventory.h"
 #include "am_map.h"
@@ -577,6 +578,8 @@ void PollControls (bool absolutes)
 	pollAndroidControls();
 #endif
 
+	Bot_Update(cmd);
+
 	if (demorecord)
 	{
 		//
@@ -1099,6 +1102,13 @@ void PlayLoop (void)
 		}
 
 		PlayFrame();
+
+		// Load only between frames, never during thinker iteration.
+		if (Bot_WantsReload() && Bot_ReloadCheckpoint())
+		{
+			playstate = ex_abort;
+			break;
+		}
 
 		//
 		// MAKE FUNNY FACE IF BJ DOESN'T MOVE FOR AWHILE
