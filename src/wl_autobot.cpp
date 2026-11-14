@@ -754,7 +754,23 @@ namespace
 		}
 
 		const bool melee = !weapon->ammo[0] && !weapon->ammo[1];
-		if(!AutobotPolicy::ShouldShoot(distanceTiles, melee))
+		if(melee)
+		{
+			// Never use the ranged-weapon retreat behavior for knife/punch
+			// attacks. Approach into dependable hit range, keep facing the
+			// enemy, then attack while closing the final gap.
+			if(!aimed)
+				return;
+			cmd.controly = AutobotPolicy::MeleeApproachSpeed(distanceTiles);
+			if(AutobotPolicy::ShouldShoot(distanceTiles, true))
+			{
+				const bool semiAuto = !!(weapon->weaponFlags & WF_NOAUTOFIRE);
+				cmd.buttonstate[bt_attack] = !semiAuto ||
+					(memory.ticks % 16 == 0);
+			}
+			return;
+		}
+		if(!AutobotPolicy::ShouldShoot(distanceTiles, false))
 		{
 			if(aimed)
 				cmd.controly = -42;
