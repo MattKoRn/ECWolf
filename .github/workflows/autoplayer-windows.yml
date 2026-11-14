@@ -6,6 +6,7 @@ on:
     paths:
       - 'src/**'
       - 'tests/**'
+      - 'tools/**'
       - 'CMakeLists.txt'
       - 'LocateSDL2.cmake'
       - '.gitmodules'
@@ -22,6 +23,8 @@ jobs:
         uses: actions/checkout@v4
         with:
           submodules: recursive
+      - name: Autoplayer harness tests
+        run: python -m unittest discover -s tests -p 'test_autoplayer_harness.py' -v
       - name: Autoplayer policy regressions
         shell: pwsh
         run: |
