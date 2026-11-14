@@ -28,6 +28,7 @@
 #include "wl_net.h"
 #include "wl_play.h"
 #include "wl_autobot.h"
+#include "wl_rpg.h"
 #include "wl_text.h"
 #include "v_palette.h"
 #include "colormatcher.h"
@@ -54,12 +55,31 @@ EMenuStyle MenuStyle = MENUSTYLE_Wolf;
 MENU_LISTENER(EnterControlBase);
 MENU_LISTENER(JoinNetGame);
 
+MENU_LISTENER(RPGShowStats)
+{
+	RPG::ShowProfile();
+	return true;
+}
+MENU_LISTENER(RPGAutoSpend)
+{
+	RPG::AutoAssign();
+	RPG::ShowProfile();
+	return true;
+}
+MENU_LISTENER(RPGSpendPoint)
+{
+	RPG::AddStat(static_cast<RPG::Stat>(which - 2));
+	RPG::ShowProfile();
+	return true;
+}
+
 Menu mainMenu(MENU_X, MENU_Y, MENU_W, 24);
 Menu optionsMenu(80, 80, 190, 28);
 Menu soundBase(24, 45, 284, 24);
 Menu controlBase(CTL_X, CTL_Y, CTL_W, 56, EnterControlBase);
 Menu displayMenu(20, 75, 285, 56);
 Menu automapMenu(40, 55, 260, 56);
+Menu rpgMenu(45, 45, 245, 24);
 Menu mouseSensitivity(20, 50, 300, 24);
 Menu joySensitivity(20, 30, 300, 24);
 Menu playerClasses(NM_X, NM_Y, NM_W, 24);
@@ -447,6 +467,17 @@ void CreateMenus()
 	optionsMenu.addItem(new MenuSwitcherMenuItem(language["STR_SD"], soundBase));
 	optionsMenu.addItem(new MenuSwitcherMenuItem(language["STR_DISPLAY"], displayMenu));
 	optionsMenu.addItem(new MenuSwitcherMenuItem(language["STR_AMOPTIONS"], automapMenu));
+	optionsMenu.addItem(new MenuSwitcherMenuItem("RPG Progression", rpgMenu));
+
+	rpgMenu.setHeadText("ECWolf RPG - Permanent Progress");
+	rpgMenu.addItem(new MenuItem("View RPG Profile", RPGShowStats));
+	rpgMenu.addItem(new MenuItem("Auto Assign All Points", RPGAutoSpend));
+	rpgMenu.addItem(new MenuItem("Damage +1", RPGSpendPoint));
+	rpgMenu.addItem(new MenuItem("Vitality +1", RPGSpendPoint));
+	rpgMenu.addItem(new MenuItem("Defense +1", RPGSpendPoint));
+	rpgMenu.addItem(new MenuItem("Recovery +1", RPGSpendPoint));
+	rpgMenu.addItem(new MenuItem("Fortune +1", RPGSpendPoint));
+	rpgMenu.addItem(new MenuItem("Agility +1", RPGSpendPoint));
 
 	// Collect options and defaults
 	const char* soundEffectsOptions[] = {language["STR_NONE"], language["STR_PC"], language["STR_ALSB"] };
