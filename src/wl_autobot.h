@@ -14,7 +14,8 @@ void Bot_Update(TicCmd_t &cmd);
 void Bot_NewGame(const FString &startMap, int difficulty);
 bool Bot_AdvanceEpisode();
 
-// Called from PlayLoop between frames; never save/load inside thinker or input ticks.
+// Save at the PlayLoop frame boundary; request a reload there, but only
+// load after PlayLoop exits (from GameLoop). Never replace actors mid-frame.
 void Bot_SaveCheckpoint();
 bool Bot_WantsReload();
 bool Bot_ResumeAfterDeath();
