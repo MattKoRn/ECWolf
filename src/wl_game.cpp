@@ -658,6 +658,12 @@ void PlayDemo (int demonumber)
 
 void Died (void)
 {
+	if (screenfaded)
+	{
+		ThreeDRefresh ();
+		VW_FadeIn ();
+	}
+
 	if(BotEnabled && Net::InitVars.mode == Net::MODE_SinglePlayer)
 	{
 		// An unattended run must never return to a black game-over screen.
@@ -669,11 +675,6 @@ void Died (void)
 		return;
 	}
 
-	if (screenfaded)
-	{
-		ThreeDRefresh ();
-		VW_FadeIn ();
-	}
 
     if (gamestate.difficulty->LivesCount >= 0) {
         --players[0].lives;
