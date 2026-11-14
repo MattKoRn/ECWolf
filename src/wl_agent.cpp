@@ -21,6 +21,7 @@
 #include "thinker.h"
 #include "wl_draw.h"
 #include "wl_game.h"
+#include "wl_rpg.h"
 #include "wl_iwad.h"
 #include "wl_loadsave.h"
 #include "wl_net.h"
@@ -200,7 +201,7 @@ void ControlMovement (APlayerPawn *ob)
 		else if (strafe < -100)
 			strafe = -100;
 
-		strafe = FixedMul(ob->speed<<7, FixedMul(strafe, ob->sidemove[abs(strafe) >= RUNMOVE]));
+		strafe = FixedMul(RPG::MovementSpeed(ob->speed)<<7, FixedMul(strafe, ob->sidemove[abs(strafe) >= RUNMOVE]));
 
 		if (strafe > 0)
 		{
@@ -222,7 +223,7 @@ void ControlMovement (APlayerPawn *ob)
 		if(controly < -100)
 			controly = -100;
 
-		controly = FixedMul(ob->speed<<7, FixedMul(controly, ob->forwardmove[controly <= -RUNMOVE]));
+		controly = FixedMul(RPG::MovementSpeed(ob->speed)<<7, FixedMul(controly, ob->forwardmove[controly <= -RUNMOVE]));
 
 		Thrust (ob,ob->angle,-controly*MOVESCALE); // move forwards
 	}
@@ -231,7 +232,7 @@ void ControlMovement (APlayerPawn *ob)
 		if(controly > 100)
 			controly = 100;
 
-		controly = FixedMul(ob->speed<<7, FixedMul(controly, ob->forwardmove[controly >= RUNMOVE]));
+		controly = FixedMul(RPG::MovementSpeed(ob->speed)<<7, FixedMul(controly, ob->forwardmove[controly >= RUNMOVE]));
 
 		angle = ob->angle + ANGLE_180;
 		Thrust (ob,angle,controly*MOVESCALE*2/3);          // move backwards
@@ -305,6 +306,7 @@ void player_t::TakeDamage (int points, AActor *attacker)
 {
 	if (gamestate.victoryflag)
 		return;
+	points = RPG::IncomingDamage(points, attacker);
 	points = (points*gamestate.difficulty->DamageFactor)>>FRACBITS;
 	NetDPrintf("%s %d points\n", __FUNCTION__, points);
 
