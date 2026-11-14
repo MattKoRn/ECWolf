@@ -1,0 +1,47 @@
+name: ECWolf Autoplayer Windows build
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - 'src/**'
+      - 'CMakeLists.txt'
+      - 'LocateSDL2.cmake'
+      - '.gitmodules'
+      - 'tools/install-autoplayer.ps1'
+      - '.github/workflows/autoplayer-windows.yml'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-2022
+    timeout-minutes: 60
+    steps:
+      - name: Checkout with SDL dependencies
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Configure
+        shell: pwsh
+        run: >
+          cmake -S . -B build/autoplayer-ci -G "Visual Studio 17 2022" -A x64
+          -DCMAKE_INSTALL_PREFIX="$PWD/dist"
+          -DINTERNAL_ZLIB=ON -DINTERNAL_BZIP2=ON -DINTERNAL_JPEG=ON
+          -DINTERNAL_SDL=ON -DINTERNAL_SDL_MIXER=ON -DINTERNAL_SDL_NET=ON
+      - name: Build
+        shell: pwsh
+        run: cmake --build build/autoplayer-ci --config Release --parallel
+      - name: Install and verify
+        shell: pwsh
+        run: |
+          cmake --install build/autoplayer-ci --config Release --prefix "$PWD/dist"
+          if (-not (Test-Path "dist/ecwolf.exe")) {
+            throw "ECWolf executable was not installed"
+          }
+          Write-Host "Windows build and packaging smoke check passed."
+      - name: Upload Windows engine
+        uses: actions/upload-artifact@v4
+        with:
+          name: ecwolf-autoplayer-windows
+          path: dist/
+          if-no-files-found: error
