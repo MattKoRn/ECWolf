@@ -18,7 +18,14 @@
 #include <vector>
 
 #ifdef _WIN32
+// ECWolf and the Windows SDK both define DWORD unless explicitly coordinated.
+#define USE_WINDOWS_DWORD
+#define USE_WINDOWS_BOOLEAN
 #define WIN32_LEAN_AND_MEAN
+// Prevent the Windows min/max macros from breaking std::min/std::max.
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
 #include <windows.h>
 #include <shlobj.h>
 #include <direct.h>
