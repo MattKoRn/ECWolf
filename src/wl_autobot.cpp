@@ -258,10 +258,11 @@ namespace
 		if(memory.ticks < memory.nextSave)
 			return;
 
-		// Saving captures a screenshot; avoid doing it when badly hurt.
-		memory.nextSave = memory.ticks + 2100;
+		// Saving captures a screenshot. Do it at the frame boundary (never
+		// during PollControls or the thinker tick) and only from a live pawn.
 		if(pawn->health < 35 || reloadRequested)
 			return;
+		memory.nextSave = memory.ticks + 2100;
 		if(GameSave::Save(CHECKPOINT, "Autoplayer checkpoint"))
 		{
 			std::strncpy(checkpointMap, gamestate.mapname, 9);
@@ -517,7 +518,12 @@ namespace
 				cmd.controly = 30;
 				return;
 			}
-			cmd.buttonstate[bt_attack] = true;
+			// Weapons flagged NOAUTOFIRE (e.g. the Wolf3D pistol) only fire
+			// on a new press. Hold for automatic weapons, pulse semiautos.
+			// PollControls carries the prior button state into buttonheld.
+			const bool semiAuto = (pawn->player->ReadyWeapon->weaponFlags &
+				WF_NOAUTOFIRE) != 0;
+			cmd.buttonstate[bt_attack] = !semiAuto || (memory.ticks % 16 == 0);
 			cmd.controly = 0;
 			// Keep away from close melee enemies when shooting.
 			if(nearest < 2.0 * TILEGLOBAL * TILEGLOBAL)
@@ -657,7 +663,6 @@ void Bot_Update(TicCmd_t &cmd)
 	cmd.controlpanx = cmd.controlpany = 0;
 	std::memset(cmd.buttonstate, 0, sizeof(cmd.buttonstate));
 
-	SaveCheckpoint(pawn);
 	bool target = false;
 	Fight(pawn, cmd, target);
 	if(!target)
@@ -665,14 +670,36 @@ void Bot_Update(TicCmd_t &cmd)
 	Recovery(pawn, !target && (cmd.controly != 0 || cmd.controlstrafe != 0));
 }
 
+void Bot_SaveCheckpoint()
+{
+	// Snapshotting from PollControls can be reentrant with input, rendering
+	// and player transitions. Only snapshot from PlayLoop's frame boundary.
+	if(!BotEnabled || !map || !memory.seenMap || memory.seenMap != map ||
+		Net::InitVars.mode != Net::MODE_SinglePlayer ||
+		Paused || demoplayback || demorecord ||
+		playstate != ex_stillplaying ||
+		players[ConsolePlayer].state != player_t::PST_LIVE ||
+		!players[ConsolePlayer].mo)
+		return;
+
+	SaveCheckpoint(players[ConsolePlayer].mo);
+}
+
 bool Bot_WantsReload()
 {
-	return BotEnabled && reloadRequested;
+	if(!BotEnabled || !map || Net::InitVars.mode != Net::MODE_SinglePlayer ||
+		demoplayback || demorecord || playstate != ex_stillplaying)
+		return false;
+
+	// A dead player must be restored before GameLoop processes the death and
+	// starts replacing pawns. If we have no checkpoint, use normal respawn.
+	const bool died = players[ConsolePlayer].state == player_t::PST_DEAD;
+	return reloadRequested || (died && checkpointValid);
 }
 
 bool Bot_ReloadCheckpoint()
 {
-	if(!BotEnabled || !checkpointValid || reloadCount >= 3 ||
+	if(!Bot_WantsReload() || !checkpointValid || reloadCount >= 3 ||
 		std::strncmp(checkpointMap, gamestate.mapname, 9) != 0)
 	{
 		reloadRequested = false;
@@ -686,6 +713,7 @@ bool Bot_ReloadCheckpoint()
 		return false;
 	}
 	Printf("Autoplayer: restored checkpoint (attempt %d/3).\n", reloadCount);
+	// Saved maps and actors are replaced during Load; no old tile cache is safe.
 	memory.seenMap = NULL;
 	loadedgame = true;
 	return true;
