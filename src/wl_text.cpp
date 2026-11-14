@@ -3,6 +3,7 @@
 #include "wl_def.h"
 #include "wl_menu.h"
 #include "wl_play.h"
+#include "wl_autobot.h"
 #include "id_sd.h"
 #include "id_vl.h"
 #include "id_vh.h"
@@ -675,7 +676,8 @@ static void ShowBriefing(FString str)
 	DrawMultiLineText(str, font, textcolor, alignment, anchor);
 
 	VL_FadeIn(0,255,10);
-	IN_Ack(ACK_Any);
+	if(!BotEnabled)
+		IN_Ack(ACK_Any);
 }
 
 void DrawMultiLineText(const FString str, FFont *font, EColorRange color, ETSAlignment align, ETSAnchor anchor)
