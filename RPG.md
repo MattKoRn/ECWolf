@@ -41,6 +41,11 @@ a randomized bonus.
 - The RPG profile is **account-wide** and persists across new games, ordinary
   saves, deaths, maps, and sessions. It is intentionally not reset or rolled
   back by loading an older map save.
+- The unattended two-campaign test harness sets `ECWOLF_RPG_PROFILE_DIR`
+  separately for Wolf3D and Spear, preventing concurrent test runs from
+  overwriting the account-wide profile. When the environment variable is
+  unset, normal save behavior and file locations are unchanged. Custom
+  profile directories must exist (the harness creates them).
 - XP, level, unspent points, and all six stat values use arbitrary-precision
   *decimal integers* persisted as strings; they are not limited by a 32-bit or
   64-bit integer maximum. Display abbreviations continue after K, M, B and T
