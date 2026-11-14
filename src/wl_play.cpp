@@ -1117,6 +1117,10 @@ void PlayLoop (void)
 			playstate = ex_abort;
 			break;
 		}
+		// No checkpoint (or no retries): use the engine's Died()/Reborn()
+		// transition directly rather than leaving the bot in a death fade.
+		if (Bot_ResumeAfterDeath())
+			break;
 
 		//
 		// MAKE FUNNY FACE IF BJ DOESN'T MOVE FOR AWHILE
