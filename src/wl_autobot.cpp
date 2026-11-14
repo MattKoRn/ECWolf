@@ -500,7 +500,7 @@ namespace
 	void Recovery(APlayerPawn *pawn, bool tryingToMove)
 	{
 		// Waiting for a door/switch or searching for a route is not a collision.
-		// Reloading the checkpoint here can reproduce the same door loop.
+		// Recover movement locally; never deserialize a save from this path.
 		if(!tryingToMove)
 		{
 			memory.stuck = 0;
@@ -641,6 +641,9 @@ bool Bot_ResumeAfterDeath()
 		noclip = memory.originalNoclip;
 		memory.usedEmergencyNoclip = false;
 	}
+	// Invalidate cached navigation even if the next map allocation happens
+	// to reuse the same address after the old map is unloaded.
+	memory.seenMap = NULL;
 	players[ConsolePlayer].state = player_t::PST_ENTER;
 	playstate = ex_died;
 	Printf("Autoplayer: death; restarting level using engine respawn.\n");
