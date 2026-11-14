@@ -66,9 +66,9 @@ int main()
 	assert(StrafeDirection(0, false, false) == 0);
 	assert(ShouldShoot(5.5, false));
 	assert(!ShouldShoot(7.0, false));
-	assert(ShouldShoot(0.92, true));
-	assert(!ShouldShoot(0.93, true));
-	assert(!ShouldShoot(1.0, true));
+	assert(ShouldShoot(1.0, true));
+	assert(ShouldShoot(1.05, true));
+	assert(!ShouldShoot(1.06, true));
 	assert(!ShouldShoot(3.0, true));
 	// Wolf knife inherits Clip ammo, but primary attack consumes zero ammo.
 	assert(IsMeleeWeapon(true, false, 0));
@@ -83,7 +83,7 @@ int main()
 	assert(MeleeApproachSpeed(0.8) == -35);
 	assert(MeleeApproachSpeed(0.65) == 0);
 	assert(ShouldShoot(0.85, true));
-	assert(!ShouldShoot(1.05, true));
+	assert(!ShouldShoot(1.06, true));
 
 	// Knife pulses start immediately upon aim/range lock, remain down for
 	// three tics, then release until the next 15-tic cycle.
