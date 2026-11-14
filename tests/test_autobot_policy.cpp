@@ -1,4 +1,5 @@
 #include "../src/wl_autobot_policy.h"
+#include "../src/wl_rpg_progression.h"
 // CI builds in Release; keep assertion-based regressions active under NDEBUG.
 #ifdef NDEBUG
 #undef NDEBUG
@@ -11,6 +12,15 @@ struct TestGrid
 {
 	std::vector<int> entry;
 	int operator()(int, int to) const { return entry[to]; }
+};
+
+struct TestXPNumber
+{
+	unsigned long long value;
+	explicit TestXPNumber(unsigned long long n = 0) : value(n) {}
+	void Multiply(const TestXPNumber &rhs) { value *= rhs.value; }
+	void MultiplySmall(unsigned int factor) { value *= factor; }
+	void Add(const TestXPNumber &rhs) { value += rhs.value; }
 };
 
 int main()
@@ -53,6 +63,36 @@ int main()
 	assert(!ShouldShoot(7.0, false));
 	assert(ShouldShoot(1.0, true));
 	assert(!ShouldShoot(3.0, true));
+	// The knife must approach a target and NEVER retreat at striking range.
+	assert(MeleeApproachSpeed(5.0) == -68);
+	assert(MeleeApproachSpeed(1.1) == -68);
+	assert(MeleeApproachSpeed(1.0) == -35);
+	assert(MeleeApproachSpeed(0.8) == -35);
+	assert(MeleeApproachSpeed(0.65) == 0);
+	assert(ShouldShoot(1.05, true));
+	assert(!ShouldShoot(1.06, true));
+
+	// Manual camera bob is unchanged; auto-play reduces it by 75%.
+	assert(AutoPlayVisualBob(400, false) == 400);
+	assert(AutoPlayVisualBob(400, true) == 100);
+	assert(AutoPlayVisualBob(-400, true) == -100);
+	assert(AutoPlayVisualBob(0, true) == 0);
+
+	// Quadratic thresholds strictly increase at every level up; the
+	// generic algorithm is also used by the engine's BigNumber.
+	assert(RPGProgression::RequiredXPForLevel(TestXPNumber(1)).value == 160);
+	assert(RPGProgression::RequiredXPForLevel(TestXPNumber(2)).value == 260);
+	assert(RPGProgression::RequiredXPForLevel(TestXPNumber(3)).value == 400);
+	assert(RPGProgression::RequiredXPForLevel(TestXPNumber(5)).value == 800);
+	assert(RPGProgression::RequiredXPForLevel(TestXPNumber(10)).value == 2500);
+	unsigned long long previous = 0;
+	for(unsigned int level = 1; level < 1000; ++level)
+	{
+		const unsigned long long required =
+			RPGProgression::RequiredXPForLevel(TestXPNumber(level)).value;
+		assert(required > previous);
+		previous = required;
+	}
 	assert(LocalThreat(0, 0, 50) == 5);
 	assert(LocalThreat(1, 1, 100) == 5);
 	assert(LocalThreat(5, 0, 100) == 0);
