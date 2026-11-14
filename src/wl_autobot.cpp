@@ -20,7 +20,6 @@
 #include "wl_main.h"
 #include "wl_net.h"
 #include "wl_play.h"
-#include "wl_loadsave.h"
 #include "id_in.h"
 #include "id_ca.h"
 #include "actor.h"
@@ -35,7 +34,6 @@ bool BotEnabled = false;
 
 namespace
 {
-	const char *const CHECKPOINT = "autoplayer-checkpoint.ecs";
 	const int DIRX[4] = { 1, 0, -1, 0 };
 	const int DIRY[4] = { 0, -1, 0, 1 };
 	const int ANGLE_SCALE = 20; // Matches ControlMovement in wl_agent.cpp.
@@ -46,18 +44,13 @@ namespace
 
 	int episodeIndex = -1;
 	int selectedDifficulty = gd_easy;
-	int reloadCount = 0;
-	char recoveryMap[9] = "";
-	char checkpointMap[9] = "";
-	bool checkpointValid = false;
-	bool reloadRequested = false;
 
 	struct BotState
 	{
 		BotState() : seenMap(NULL), width(0), height(0), ticks(0),
 			stuck(0), lastPositionTick(0), lastX(0), lastY(0),
 			usedEmergencyNoclip(false), originalNoclip(false),
-			emergencyUntil(0), nextSave(35), noGoalTicks(0)
+			emergencyUntil(0), noGoalTicks(0)
 		{
 			mapName[0] = '\0';
 		}
@@ -76,7 +69,6 @@ namespace
 		std::vector<unsigned char> doorAttempts;
 		bool usedEmergencyNoclip, originalNoclip;
 		unsigned int emergencyUntil;
-		unsigned int nextSave;
 		unsigned int noGoalTicks;
 		char mapName[9];
 	} memory;
@@ -141,15 +133,6 @@ namespace
 		memory.doorAttempts.resize(header.width * header.height, 0);
 		memory.lastX = pawn->x;
 		memory.lastY = pawn->y;
-		reloadRequested = false;
-
-		if(std::strncmp(recoveryMap, gamestate.mapname, 9) != 0)
-		{
-			std::strncpy(recoveryMap, gamestate.mapname, 9);
-			recoveryMap[8] = '\0';
-			reloadCount = 0;
-			checkpointValid = false;
-		}
 		Printf("Autoplayer: map %s (%ux%u).\n",
 			gamestate.mapname, header.width, header.height);
 	}
@@ -249,26 +232,6 @@ namespace
 		if(motion < -100) motion = -100;
 		cmd.controlx = motion;
 		return delta <= tolerance && delta >= -tolerance;
-	}
-
-	void SaveCheckpoint(APlayerPawn *pawn)
-	{
-		if(!pawn || players[ConsolePlayer].state != player_t::PST_LIVE)
-			return;
-		if(memory.ticks < memory.nextSave)
-			return;
-
-		// Saving captures a screenshot. Do it at the frame boundary (never
-		// during PollControls or the thinker tick) and only from a live pawn.
-		if(pawn->health < 35 || reloadRequested)
-			return;
-		memory.nextSave = memory.ticks + 2100;
-		if(GameSave::Save(CHECKPOINT, "Autoplayer checkpoint"))
-		{
-			std::strncpy(checkpointMap, gamestate.mapname, 9);
-			checkpointMap[8] = '\0';
-			checkpointValid = true;
-		}
 	}
 
 	void Navigate(APlayerPawn *pawn, TicCmd_t &cmd)
@@ -567,20 +530,10 @@ namespace
 			memory.stuck = 0;
 		}
 
-		if(memory.stuck > 70 * 180 && reloadCount >= 2)
-		{
-			Printf("Autoplayer: emergency advance after repeated obstruction.\n");
-			playstate = ex_completed;
-		}
-		else if(memory.stuck > 280 && reloadCount < 2 && checkpointValid &&
-			!reloadRequested)
-		{
-			reloadRequested = true;
-			memory.stuck = 0;
-			Printf("Autoplayer: requesting checkpoint retry.\n");
-		}
-		else if(memory.stuck > 560 && reloadCount >= 2 &&
-			!memory.usedEmergencyNoclip)
+
+		// Use movement-based recovery rather than loading a snapshot over
+		// a dying player. Emergency noclip will expire after 210 ticks.
+		if(memory.stuck > 560 && !memory.usedEmergencyNoclip)
 		{
 			memory.originalNoclip = noclip;
 			noclip = true;
@@ -588,6 +541,12 @@ namespace
 			memory.emergencyUntil = memory.ticks + 210;
 			Printf("Autoplayer: temporary emergency noclip.\n");
 		}
+		else if(memory.stuck > 70 * 180)
+		{
+			Printf("Autoplayer: emergency advance after repeated obstruction.\n");
+			playstate = ex_completed;
+		}
+
 	}
 }
 
@@ -603,10 +562,6 @@ void Bot_NewGame(const FString &startMap, int difficulty)
 			break;
 		}
 	}
-	recoveryMap[0] = '\0';
-	checkpointValid = false;
-	reloadRequested = false;
-	reloadCount = 0;
 	memory.seenMap = NULL;
 }
 
@@ -670,87 +625,24 @@ void Bot_Update(TicCmd_t &cmd)
 	Recovery(pawn, !target && (cmd.controly != 0 || cmd.controlstrafe != 0));
 }
 
-void Bot_SaveCheckpoint()
-{
-	// Snapshotting from PollControls can be reentrant with input, rendering
-	// and player transitions. Only snapshot from PlayLoop's frame boundary.
-	if(!BotEnabled || !map || !memory.seenMap || memory.seenMap != map ||
-		Net::InitVars.mode != Net::MODE_SinglePlayer ||
-		Paused || demoplayback || demorecord ||
-		playstate != ex_stillplaying ||
-		players[ConsolePlayer].state != player_t::PST_LIVE ||
-		!players[ConsolePlayer].mo)
-		return;
-
-	SaveCheckpoint(players[ConsolePlayer].mo);
-}
-
-bool Bot_WantsReload()
-{
-	if(!BotEnabled || !map || Net::InitVars.mode != Net::MODE_SinglePlayer ||
-		demoplayback || demorecord ||
-		(playstate != ex_stillplaying && playstate != ex_abort) ||
-		!checkpointValid || reloadCount >= 3 ||
-		std::strncmp(checkpointMap, gamestate.mapname, 9) != 0)
-		return false;
-
-	// The request is only inspected here. GameSave::Load is not safe to
-	// execute from PlayLoop while its previous map and player are in use.
-	return reloadRequested ||
-		players[ConsolePlayer].state == player_t::PST_DEAD;
-}
-
-
 bool Bot_ResumeAfterDeath()
 {
 	if(!BotEnabled || !map || Paused ||
 		Net::InitVars.mode != Net::MODE_SinglePlayer ||
 		demoplayback || demorecord || playstate != ex_stillplaying ||
-		players[ConsolePlayer].state != player_t::PST_DEAD ||
-		Bot_WantsReload())
+		players[ConsolePlayer].state != player_t::PST_DEAD)
 		return false;
 
-	// If a checkpoint is missing or the retry budget has been exhausted,
-	// bypass the unattended death fade and use the existing engine Died()
-	// flow. No load, no synthetic player spawn, no dead-pawn dereference.
+	// Re-enter ECWolf's normal Died()/Reborn() path. It recreates the
+	// level and player cleanly; a serialized snapshot is never loaded
+	// over a dying player. Persistent RPG data is saved separately.
 	if(memory.usedEmergencyNoclip)
 	{
 		noclip = memory.originalNoclip;
 		memory.usedEmergencyNoclip = false;
 	}
-	reloadRequested = false;
 	players[ConsolePlayer].state = player_t::PST_ENTER;
 	playstate = ex_died;
-	Printf("Autoplayer: no usable checkpoint; restarting via normal death flow.\n");
-	return true;
-}
-
-bool Bot_ReloadCheckpoint()
-{
-	// Called by GameLoop only after PlayLoop has fully returned.
-	if(!Bot_WantsReload())
-	{
-		reloadRequested = false;
-		return false;
-	}
-	reloadRequested = false;
-	++reloadCount;
-
-	// Critical: Load calls SetupGameLevel, which checks loadedgame to avoid
-	// resetting the level and respawning actors before deserialization.
-	// The normal load menu sets this flag BEFORE calling GameSave::Load.
-	const bool wasLoaded = loadedgame;
-	loadedgame = true;
-	Printf("Autoplayer: restoring checkpoint (%d/3).\n", reloadCount);
-	if(!GameSave::Load(CHECKPOINT))
-	{
-		loadedgame = wasLoaded;
-		checkpointValid = false;
-		Printf("Autoplayer: checkpoint unavailable; using normal recovery.\n");
-		return false;
-	}
-	// All old map pointers and navigation tiles are now invalid.
-	memory.seenMap = NULL;
-	Printf("Autoplayer: checkpoint restored.\n");
+	Printf("Autoplayer: death; restarting level using engine respawn.\n");
 	return true;
 }
