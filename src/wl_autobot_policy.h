@@ -203,12 +203,30 @@ namespace AutobotPolicy
 		return StrafeDirection(ticks, positiveClear, negativeClear);
 	}
 
-	// Keep a single tested smoothing ratio for world and weapon bob.
-	// Camera pitch and real collision/movement remain unchanged.
+	// Further reduce camera and weapon movement bob during unattended play:
+	// one tenth of manual-play amplitude (previously one quarter).
+	// Real movement, aiming and manual-play visuals remain unchanged.
 	template<class T>
 	inline T AutoPlayVisualBob(T bob, bool autoPlaying)
 	{
-		return autoPlaying ? bob / 4 : bob;
+		return autoPlaying ? bob / 10 : bob;
+	}
+
+	// Collect every reachable enemy ammo drop while there is room for it.
+	// Priority 1 outranks exits; full inventory is not a collectible drop.
+	inline int AmmoDropPriority(bool dropped, bool collectible,
+		int normalPriority)
+	{
+		return dropped && collectible ? 1 : normalPriority;
+	}
+
+	// NOAUTOFIRE knives need a real release between presses. Start a short
+	// attack burst as soon as the bot has an aligned close-range target, not
+	// on a global clock which can repeatedly miss that opportunity.
+	inline bool MeleeAttackInput(unsigned int attackTics, bool aligned,
+		bool inRange)
+	{
+		return aligned && inRange && (attackTics % 15) < 3;
 	}
 
 	// Wolf3D Knife inherits an ammo type from WolfWeapon but overrides
@@ -233,7 +251,7 @@ namespace AutobotPolicy
 	inline bool ShouldShoot(double distanceTiles, bool melee)
 	{
 		// A little margin below engine melee range avoids whiffing.
-		return distanceTiles <= (melee ? 1.05 : 5.5);
+		return distanceTiles <= (melee ? 0.92 : 5.5);
 	}
 }
 
