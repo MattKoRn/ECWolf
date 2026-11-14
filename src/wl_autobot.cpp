@@ -205,6 +205,17 @@ namespace
 			return false;
 
 		MapSpot spot = map->GetSpot(x, y, 0);
+		// Reject a landing cell if a nearby moving pushwall is heading
+		// into it; waiting is safer than entering a predicted collision.
+		for(int dir = 0; dir < 4; ++dir)
+		{
+			const int nx = x + DIRX[dir], ny = y + DIRY[dir];
+			if(!Inside(nx, ny)) continue;
+			MapSpot neighbor = map->GetSpot(nx, ny, 0);
+			if(neighbor->thinker && neighbor->pushAmount != 0 &&
+				neighbor->pushReceptor == spot)
+				return false;
+		}
 		if(!spot->tile)
 			return true;
 
@@ -823,7 +834,10 @@ namespace
 				AutobotPolicy::RecoveryFor(memory.stuck, memory.detours);
 			if(step == AutobotPolicy::Detour && memory.waypoint >= 0)
 			{
-				memory.blockedCellUntil[memory.waypoint] = memory.ticks + 70 * 8;
+				const unsigned int backoff = 8U +
+					std::min(12U, failures.detours * 2U);
+				memory.blockedCellUntil[memory.waypoint] =
+					memory.ticks + 70 * backoff;
 				++memory.detours;
 				memory.stuck = 0;
 				++failures.detours;
@@ -889,14 +903,21 @@ void Bot_NewGame(const FString &startMap, int difficulty)
 	}
 	memory.seenMap = NULL;
 	failures = FailureHistory();
+	LogEvent("campaign_start", "new_game");
 }
 
 bool Bot_AdvanceEpisode()
 {
-	if(!BotEnabled || episodeIndex < 0 ||
+	if(!BotEnabled ||
 		(playstate != ex_completed && playstate != ex_secretlevel &&
 		 playstate != ex_victorious && playstate != ex_newmap))
 		return false;
+	if(episodeIndex < 0)
+	{
+		LogEvent("campaign_complete", "no_episode_metadata");
+		BotEnabled = false;
+		return false;
+	}
 
 	for(unsigned int i = static_cast<unsigned int>(episodeIndex + 1);
 		i < EpisodeInfo::GetNumEpisodes(); ++i)
