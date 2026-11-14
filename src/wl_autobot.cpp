@@ -521,8 +521,8 @@ namespace
 			// Weapons flagged NOAUTOFIRE (e.g. the Wolf3D pistol) only fire
 			// on a new press. Hold for automatic weapons, pulse semiautos.
 			// PollControls carries the prior button state into buttonheld.
-			const bool semiAuto = (pawn->player->ReadyWeapon->weaponFlags &
-				WF_NOAUTOFIRE) != 0;
+			const bool semiAuto = !!(pawn->player->ReadyWeapon->weaponFlags &
+				WF_NOAUTOFIRE);
 			cmd.buttonstate[bt_attack] = !semiAuto || (memory.ticks % 16 == 0);
 			cmd.controly = 0;
 			// Keep away from close melee enemies when shooting.
