@@ -406,7 +406,7 @@ namespace
 			if(actor->player || !actor->IsKindOf(NATIVE_CLASS(Inventory)) ||
 				!Inside(actor->tilex, actor->tiley))
 				continue;
-			const AInventory *item = static_cast<const AInventory *>(actor);
+			AInventory *item = static_cast<AInventory *>(actor.Item());
 			if(item->owner || (item->itemFlags & IF_INACTIVE))
 				continue;
 
@@ -420,7 +420,7 @@ namespace
 			bool collectibleAmmo = false;
 			if(ammoItem)
 			{
-				const AAmmo *groundAmmo = static_cast<const AAmmo *>(actor);
+				const AAmmo *groundAmmo = static_cast<const AAmmo *>(actor.Item());
 				const AAmmo *heldAmmo = static_cast<const AAmmo *>(
 					pawn->FindInventory(groundAmmo->GetAmmoType()));
 				collectibleAmmo = !heldAmmo || heldAmmo->amount < heldAmmo->maxamount;
@@ -429,7 +429,7 @@ namespace
 			{
 				// Enemy-dropped weapons can also replenish their ammo; avoid
 				// circling a weapon when it is owned and all ammo is full.
-				const AWeapon *groundWeapon = static_cast<const AWeapon *>(actor);
+				const AWeapon *groundWeapon = static_cast<const AWeapon *>(actor.Item());
 				collectibleAmmo = !pawn->FindInventory(cls);
 				for(unsigned int slot = 0; slot < 2; ++slot)
 				{
@@ -445,9 +445,10 @@ namespace
 			if(ammunition && !collectibleAmmo)
 				continue;
 
-			const AWeapon *ready = pawn->player->ReadyWeapon;
-			const unsigned int ammo = ready && ready->ammo[0] ?
-				static_cast<unsigned int>(ready->ammo[0]->amount) : 0;
+			AWeapon *ready = pawn->player->ReadyWeapon;
+			AAmmo *readyAmmo = ready ? ready->ammo[0] : NULL;
+			const unsigned int ammo = readyAmmo ?
+				static_cast<unsigned int>(readyAmmo->amount) : 0;
 			const unsigned int localThreat = memory.threat[start];
 			const int urgency = AutobotPolicy::SupplyPriority(healing,
 				ammunition, pawn->health, pawn->maxhealth, ammo,
