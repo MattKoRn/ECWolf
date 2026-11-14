@@ -78,6 +78,71 @@ Both `.github/workflows/autoplayer-windows.yml` and `.github/workflows/autoplaye
 build diagnostics. A Windows machine with the toolchain and licensed game
 data is required to validate gameplay.
 
+## Threat-aware planning and objective prerequisites
+
+The bot now recomputes local threat risk each tick from living monsters.
+Threat is weighted more heavily when the player is hurt, and routes add
+extra waiting cost around moving doors and pushwalls. It avoids a cell
+into which a nearby moving pushwall is predicted to move. These are
+conservative heuristics, not complete projectile simulation.
+
+Keys and urgent supplies remain first priorities. Exits initially take
+precedence over switches and combat; after two failed exit attempts,
+the bot temporarily prioritizes unused switches and living monsters
+that may guard scripted progression. It tracks failed exit presses,
+unreachable goals, collisions and deaths and adjusts detour backoff and
+danger penalties after repeated failures. Weapon selection uses the
+game's existing weapon-slot controls; it favors equipped weapons with
+useful ammunition and adjusts dodging for nearby threat levels. Actual
+mod-specific puzzle prerequisites cannot be guaranteed.
+
+## Automated Wolf3D / Spear gameplay harness
+
+The optional harness runs the **real installed ECWolf engine**. It needs
+Python 3, a usable graphical desktop and legally owned game-data files.
+It never includes or downloads game data. The default F12 toggle is
+unchanged; the harness uses these additional command-line switches:
+
+- `--autoplay`: start with the existing auto-player enabled.
+- `--autoplay-log <file>`: write structured bot events to that file,
+  without adding an in-game HUD.
+
+Build with `BUILD-AND-INSTALL-AUTOPLAYER.bat` on Windows first.
+Then run from the repository root, substituting your paths:
+
+```powershell
+python tools/autoplayer-harness.py --engine "C:\Path\To\ecwolf.exe" --campaign both --wolf-data "C:\Games\Wolf3D" --spear-data "C:\Games\Spear" --minutes 20 --out-dir "build/autoplayer-playthroughs"
+```
+
+The Wolf directory must contain `GAMEMAPS.WL6`, `MAPHEAD.WL6`
+and `VSWAP.WL6`. The Spear directory needs their corresponding
+`.SOD` files. File names are checked case-insensitively. Select
+`--campaign wolf3d` or `--campaign spear` for individual runs;
+the optional `--start-map` defaults to `MAP01`. The game-data
+directory is the engine's working directory during each run.
+
+Reports in `--out-dir` include `summary.json`, an engine-output log and
+an event log per campaign. Events record `map_start`, `goal`, `switch_use`,
+`exit_retry`, `weapon_select`, `failure` with a cause,
+`emergency_noclip`, `emergency_advance` and `campaign_complete`.
+The harness only reports success after observing an explicit
+`campaign_complete` event. A timeout, crash or early exit is incomplete;
+the report preserves the evidence for diagnosis. The engine itself does
+not automatically quit after campaign completion; the harness ends the
+process after receiving the completion event.
+
+The synthetic (non-proprietary) harness tests can be run with:
+
+```text
+python -m unittest discover -s tests -p "test_autoplayer_harness.py" -v
+```
+
+These verify the process runner, data-file validation, log parsing and
+incomplete-run handling **without** proving that a full Wolf3D or Spear
+campaign succeeds. Windows and Linux CI also runs the standalone C++
+policy tests. A full in-engine playthrough and an actual Windows build
+still require independent verification.
+
 ## Combat and death regression checks
 
 The bot pulses Attack for weapons with `NOAUTOFIRE` (such as the Wolf3D
