@@ -17,6 +17,7 @@ bool Bot_AdvanceEpisode();
 // Called from PlayLoop between frames; never save/load inside thinker or input ticks.
 void Bot_SaveCheckpoint();
 bool Bot_WantsReload();
+bool Bot_ResumeAfterDeath();
 bool Bot_ReloadCheckpoint();
 
 #endif
