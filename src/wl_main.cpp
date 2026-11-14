@@ -941,6 +941,17 @@ static const char* CheckParameters(int argc, char *argv[], TArray<FString> &file
 			}
 			param_difficulty = atoi(argv[i])-1; // 1-based indexing
 		}
+		else IFARG("--autoplay")
+			BotEnabled = true;
+		else IFARG("--autoplay-log")
+		{
+			if(++i >= argc)
+			{
+				printf("The autoplay-log option requires a file path!\n");
+				hasError = true;
+			}
+			else Bot_SetLogPath(argv[i]);
+		}
 		else IFARG("--nowait")
 			param_nowait = true;
 		else IFARG("--tedlevel")
@@ -1162,6 +1173,8 @@ static const char* CheckParameters(int argc, char *argv[], TArray<FString> &file
 			" --normal               Sets the difficulty to normal for tedlevel\n"
 			" --hard                 Sets the difficulty to hard for tedlevel\n"
 			" --nowait               Skips intro screens\n"
+			" --autoplay             Enables the existing F12 bot at startup\n"
+			" --autoplay-log <path>  Writes detailed bot events to a log file\n"
 			" --fullscreen           Starts the game in fullscreen mode\n"
 			" --res <width> <height> Sets the screen resolution\n"
 			" --aspect <aspect>      Sets the aspect ratio.\n"
