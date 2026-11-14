@@ -27,6 +27,7 @@
 #include "g_mapinfo.h"
 #include "g_shared/a_keys.h"
 #include "g_shared/a_inventory.h"
+#include "thingdef/thingdef.h" // Complete ClassDef for IsDescendantOf checks.
 #include "lnspec.h"
 
 bool BotEnabled = false;
