@@ -35,7 +35,8 @@ function Run-Checked {
         else {
             "See the output immediately above for the underlying failure.`n"
         }
-        throw "$Exe failed during '$Stage' (exit code $exitCode).`n$detail" + "Full log: $logPath"
+        $summary = "$Exe failed during '$Stage' (exit code $exitCode).`n$detail" + "Full log: $logPath"
+        throw $summary
     }
 }
 
