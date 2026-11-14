@@ -85,8 +85,14 @@ data is required to validate gameplay.
 - If CMake fails to find SDL or a bundled codec: run
   `git submodule sync --recursive` and `git submodule update --init --recursive`.
   The installer runs both commands automatically. If you still see the old
-  `Could NOT find OpusFile` error after updating, remove
-  `build/autoplayer-win64/CMakeCache.txt` and rerun the batch file.
+  `Could NOT find OpusFile` error after updating, use the `-Reconfigure`
+  switch shown above to refresh CMake without deleting compiled files.
+- If PowerShell reports `cmake failed during 'configure'` or `'build'`, that
+  is only the wrapper reporting a nonzero exit code. Look at the diagnostic
+  lines included in the message or open the corresponding
+  `build/autoplayer-logs/configure.log` or `build/autoplayer-logs/build.log`.
+  Copy the first actual CMake or compiler error from that log when reporting
+  an issue; the wrapper line alone cannot identify the failed dependency.
 - If a moving wall, locked door, or mod-specific puzzle traps the bot, disable
   it with **F12**, resolve the obstacle, and re-enable it.
 - If automatic recovery is undesirable, keep autopilot off or adjust the
