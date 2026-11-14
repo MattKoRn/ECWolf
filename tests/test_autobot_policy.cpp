@@ -49,4 +49,31 @@ int main()
 	assert(!ShouldShoot(7.0, false));
 	assert(ShouldShoot(1.0, true));
 	assert(!ShouldShoot(3.0, true));
+	assert(LocalThreat(0, 0, 50) == 5);
+	assert(LocalThreat(1, 1, 100) == 5);
+	assert(LocalThreat(5, 0, 100) == 0);
+	assert(ThreatAwareCost(false, false, false, 0, 0, false) == 10);
+	assert(ThreatAwareCost(false, true, true, 0, 0, false) >
+		ThreatAwareCost(false, true, false, 0, 0, false));
+	assert(ThreatAwareCost(false, false, false, 0, 6, true) >
+		ThreatAwareCost(false, false, false, 0, 6, false));
+	assert(ObjectivePriority(KeyObjective, 4, true, true, true) == 0);
+	assert(ObjectivePriority(ExitObjective, 0, true, true, true) == 2);
+	assert(ObjectivePriority(ExitObjective, 2, true, false, false) == 5);
+	assert(ObjectivePriority(ExitObjective, 2, false, true, false) == 5);
+	assert(ObjectivePriority(ExitObjective, 2, false, false, true) == 5);
+	assert(ObjectivePriority(ExitObjective, 2, false, false, false) == 2);
+	assert(ObjectivePriority(SwitchObjective, 2, false, true, true) <
+		ObjectivePriority(ExitObjective, 2, false, true, true));
+	assert(WeaponScore(4, 40, false, 3.0, 1) >
+		WeaponScore(1, 40, false, 3.0, 1));
+	assert(WeaponScore(4, 2, false, 3.0, 1) <
+		WeaponScore(1, 40, false, 3.0, 1));
+	assert(WeaponScore(4, 0, false, 3.0, 1) < 0);
+	assert(WeaponScore(0, 0, true, 1.0, 1) > 0);
+	assert(WeaponScore(0, 0, true, 3.0, 1) < 0);
+	assert(ThreatDodgeDirection(0, true, true, 1, 4) == 1);
+	assert(ThreatDodgeDirection(0, true, true, 4, 1) == -1);
+	assert(ThreatDodgeDirection(0, false, true, 1, 4) == -1);
+	assert(ThreatDodgeDirection(0, false, false, 1, 4) == 0);
 }
