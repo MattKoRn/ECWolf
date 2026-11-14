@@ -21,6 +21,7 @@
 #include "lumpremap.h"
 #include "wl_agent.h"
 #include "wl_autobot.h"
+#include "wl_autobot_policy.h"
 #include "wl_draw.h"
 #include "wl_game.h"
 #include "wl_net.h"
@@ -1139,8 +1140,8 @@ void WallRefresh (void)
 	fixed curbob = gamestate.victoryflag ? 0 : FixedMul(FixedMul(players[ConsolePlayer].bob, playerMovebob)>>1, finesine[bobangle]);
 	// Autoplay at high movement speed can make the camera bounce rapidly.
 	// Smooth only the visual bob, not player movement or manual gameplay.
-	if(BotEnabled && Net::InitVars.mode == Net::MODE_SinglePlayer)
-		curbob /= 4;
+	curbob = AutobotPolicy::AutoPlayVisualBob(curbob,
+		BotEnabled && Net::InitVars.mode == Net::MODE_SinglePlayer);
 
 	viewz = curbob - players[ConsolePlayer].mo->viewheight;
 
