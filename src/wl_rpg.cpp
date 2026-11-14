@@ -318,13 +318,20 @@ unsigned int BoundDamage(double value) {
 namespace RPG {
 void Initialize() {
     if(ready) return;
-    saveDirectory = Documents() +
+    // The unattended dual-campaign harness sets a distinct profile folder
+    // per engine process. Normal gameplay keeps the existing Documents path.
+    const char *isolatedProfile = std::getenv("ECWOLF_RPG_PROFILE_DIR");
+    if(isolatedProfile && *isolatedProfile) {
+        saveDirectory = isolatedProfile;
+    } else {
+        saveDirectory = Documents() +
 #ifdef _WIN32
-        "\\ECWolfRPG";
+            "\\ECWolfRPG";
 #else
-        "/ECWolfRPG";
+            "/ECWolfRPG";
 #endif
-    CreateDirectory(Documents());
+        CreateDirectory(Documents());
+    }
     CreateDirectory(saveDirectory);
     saveFile = saveDirectory +
 #ifdef _WIN32
