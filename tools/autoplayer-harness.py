@@ -83,6 +83,11 @@ def run_campaign(engine, campaign, data_dir, out_dir, seconds, start_map,
             exit_code = proc.returncode
     events = read_events(telemetry)
     counts = dict(collections.Counter(events))
+    event_lines = (telemetry.read_text(encoding="utf-8", errors="replace")
+                   .splitlines() if telemetry.exists() else [])
+    death_count = sum(1 for line in event_lines if
+                      "event=failure" in line.split() and
+                      "detail=player_death" in line.split())
     if completed:
         status = "completed"
     elif timed_out:
@@ -95,7 +100,7 @@ def run_campaign(engine, campaign, data_dir, out_dir, seconds, start_map,
         "seconds": round(time.monotonic() - start, 2),
         "engine_exit_code": exit_code,
         "map_starts": counts.get("map_start", 0),
-        "deaths": counts.get("failure", 0),
+        "deaths": death_count,
         "events": counts,
         "event_log": str(telemetry),
         "engine_log": str(output),
