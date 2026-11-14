@@ -161,6 +161,14 @@ namespace AutobotPolicy
 	// Knife/punch attacks should enter and STAY in actual striking range.
 	// A_CustomPunch typically reaches about one tile; close in further
 	// rather than stepping backwards as the previous ranged logic did.
+	// Keep a single tested smoothing ratio for world and weapon bob.
+	// Camera pitch and real collision/movement remain unchanged.
+	template<class T>
+	inline T AutoPlayVisualBob(T bob, bool autoPlaying)
+	{
+		return autoPlaying ? bob / 4 : bob;
+	}
+
 	inline int MeleeApproachSpeed(double distanceTiles)
 	{
 		if(distanceTiles > 1.0) return -68;
