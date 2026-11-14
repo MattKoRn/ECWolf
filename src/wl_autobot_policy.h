@@ -61,13 +61,24 @@ namespace AutobotPolicy
 	}
 
 
+	// Allow four genuine pathfinding retries before resorting to noclip.
+	// The stalled timer resets after each detour, so the last-resort delay
+	// is measured AFTER the fourth failed route.
 	inline RecoveryStep RecoveryFor(unsigned int stalledTics, unsigned int detours)
 	{
-		if(stalledTics >= 280 && detours >= 3)
+		if(stalledTics >= 70 * 8 && detours >= 4)
 			return EmergencyNoclip;
-		if(stalledTics >= 140 && detours < 3)
+		if(stalledTics >= 140 && detours < 4)
 			return Detour;
 		return KeepTrying;
+	}
+
+	// Completion must never depend on a brief obstruction or a temporary
+	// scripted objective outage. These timeouts are measured in engine tics.
+	inline bool ShouldEmergencyAdvance(unsigned int failedTics,
+		unsigned int failedAttempts)
+	{
+		return failedTics >= 70 * 480 && failedAttempts >= 4;
 	}
 
 	inline int TravelCost(bool interactive, unsigned int danger)
@@ -131,6 +142,26 @@ namespace AutobotPolicy
 		return 7;
 	}
 
+	// Survival pickups become urgent as health/ammunition falls, and sooner
+	// when nearby hostiles or repeat deaths make the situation dangerous.
+	inline int SupplyPriority(bool healing, bool ammunition, int health,
+		int maxHealth, unsigned int ammo, unsigned int localThreat,
+		unsigned int deaths)
+	{
+		if(healing && maxHealth > 0 && health < maxHealth)
+		{
+			const int percent = health * 100 / maxHealth;
+			if(percent < 50 || (percent < 65 && localThreat >= 3) ||
+				(percent < 80 && (localThreat >= 5 || deaths >= 2)))
+				return 1;
+		}
+		if(ammunition && (ammo <= 8 ||
+			(localThreat >= 5 && ammo <= 16) ||
+			(deaths >= 2 && ammo <= 18)))
+			return 1;
+		return 6;
+	}
+
 	inline int WeaponScore(int slot, unsigned int ammo, bool melee,
 		double distanceTiles, unsigned int threat)
 	{
@@ -144,6 +175,20 @@ namespace AutobotPolicy
 		if(threat >= 5 && slot >= 2) score += 12; // Stronger attacks under pressure.
 		if(distanceTiles < 1.5 && slot >= 5) score -= 25;
 		return score;
+	}
+
+	// Back away from close ranged threats, especially at low health. Attack
+	// while retreating, rather than running into enemies or emptying the
+	// magazine at ranges where shots do not land.
+	inline int RangedMovementSpeed(double distanceTiles, bool lowHealth,
+		unsigned int localThreat)
+	{
+		if(distanceTiles < 1.5) return lowHealth ? 60 : 38;
+		if(distanceTiles < 2.5) return lowHealth ? 45 : 25;
+		if(lowHealth && localThreat >= 5 && distanceTiles < 4.5)
+			return 20;
+		if(distanceTiles > 5.5) return -42;
+		return 0;
 	}
 
 	inline int ThreatDodgeDirection(unsigned int ticks,
