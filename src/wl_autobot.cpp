@@ -538,41 +538,68 @@ namespace
 			nearest = square;
 			target = actor;
 		}
-
 		if(!target)
 			return;
+
 		hasTarget = true;
-		if(TurnToward(pawn, cmd, target->x, target->y, 9))
+		memory.waypoint = -1;
+		const double distanceTiles = std::sqrt(nearest) / TILEGLOBAL;
+		const bool aimed = TurnToward(pawn, cmd, target->x, target->y, 9);
+		AWeapon *weapon = pawn->player->ReadyWeapon;
+		if(!weapon)
 		{
-			if(pawn->player->ReadyWeapon &&
-				!pawn->player->ReadyWeapon->CheckAmmo(AWeapon::PrimaryFire, false))
-			{
-				// Avoid firing empty ranged weapons. Cycle inventory instead.
-				if(memory.ticks % 18 == 0)
-					cmd.buttonstate[bt_nextweapon] = true;
-				cmd.controly = 30;
-				return;
-			}
-			// Weapons flagged NOAUTOFIRE (e.g. the Wolf3D pistol) only fire
-			// on a new press. Hold for automatic weapons, pulse semiautos.
-			// PollControls carries the prior button state into buttonheld.
-			const bool semiAuto = !!(pawn->player->ReadyWeapon->weaponFlags &
-				WF_NOAUTOFIRE);
-			cmd.buttonstate[bt_attack] = !semiAuto || (memory.ticks % 16 == 0);
-			cmd.controly = 0;
-			// Keep away from close melee enemies when shooting.
-			if(nearest < 2.0 * TILEGLOBAL * TILEGLOBAL)
-				cmd.controly = 30;
+			cmd.controly = -35;
+			return;
 		}
-		else
-			cmd.controly = 0;
+		if(!weapon->CheckAmmo(AWeapon::PrimaryFire, false))
+		{
+			if(memory.ticks % 18 == 0)
+				cmd.buttonstate[bt_nextweapon] = true;
+			cmd.controly = distanceTiles < 2.5 ? 32 : -20;
+			return;
+		}
+
+		const bool melee = !weapon->ammo[0] && !weapon->ammo[1];
+		if(!AutobotPolicy::ShouldShoot(distanceTiles, melee))
+		{
+			if(aimed)
+				cmd.controly = -42;
+			return;
+		}
+		if(!aimed)
+			return;
+
+		// Preserve press/release edges for the pistol and other semiautos.
+		// Don't waste bullets on targets beyond the useful firing distance.
+		const bool semiAuto = !!(weapon->weaponFlags & WF_NOAUTOFIRE);
+		cmd.buttonstate[bt_attack] = !semiAuto || (memory.ticks % 16 == 0);
+		const bool cautious = pawn->health < (failures.deaths >= 2 ? 70 : 45);
+		cmd.controly = distanceTiles < 2.0 ? 34 :
+			(cautious && distanceTiles < 4.0 ? 15 : 0);
+
+		if(!melee && distanceTiles > 1.5 && distanceTiles < 6.5)
+		{
+			// Inspect both lateral tiles before choosing a dodging direction.
+			const double radians = static_cast<double>(pawn->angle / ANGLE_1) *
+				3.14159265358979323846 / 180.0;
+			const fixed sidex = static_cast<fixed>(std::sin(radians) * TILEGLOBAL * 0.75);
+			const fixed sidey = static_cast<fixed>(std::cos(radians) * TILEGLOBAL * 0.75);
+			const int px = (pawn->x + sidex) >> TILESHIFT;
+			const int py = (pawn->y + sidey) >> TILESHIFT;
+			const int nx = (pawn->x - sidex) >> TILESHIFT;
+			const int ny = (pawn->y - sidey) >> TILESHIFT;
+			const bool positiveClear = Inside(px, py) &&
+				CanEnter(px, py, pawn->tilex, pawn->tiley, pawn);
+			const bool negativeClear = Inside(nx, ny) &&
+				CanEnter(nx, ny, pawn->tilex, pawn->tiley, pawn);
+			cmd.controlstrafe = 42 * AutobotPolicy::StrafeDirection(
+				memory.ticks, positiveClear, negativeClear);
+		}
 	}
 
 
 	void Recovery(APlayerPawn *pawn, bool tryingToMove)
 	{
-		// Waiting for a door/switch or searching for a route is not a collision.
-		// Recover movement locally; never deserialize a save from this path.
 		if(!tryingToMove)
 		{
 			memory.stuck = 0;
@@ -586,40 +613,62 @@ namespace
 				std::llabs(static_cast<long long>(pawn->x) - memory.lastX) +
 				std::llabs(static_cast<long long>(pawn->y) - memory.lastY);
 			if(moved < FRACUNIT / 4)
+			{
 				memory.stuck += 70;
+				memory.failedRecoveryTicks += 70;
+			}
 			else
+			{
 				memory.stuck = 0;
+				memory.detours = 0;
+				memory.failedRecoveryTicks = 0;
+			}
 			memory.lastX = pawn->x;
 			memory.lastY = pawn->y;
 			memory.lastPositionTick = memory.ticks;
 		}
 
-		if(memory.usedEmergencyNoclip &&
-			memory.ticks >= memory.emergencyUntil)
+		if(memory.usedEmergencyNoclip && memory.ticks >= memory.emergencyUntil)
 		{
 			noclip = memory.originalNoclip;
 			memory.usedEmergencyNoclip = false;
 			memory.stuck = 0;
+			memory.detours = 0;
+			Printf("Autoplayer: emergency noclip expired.\n");
 		}
 
-
-		// Use movement-based recovery rather than loading a snapshot over
-		// a dying player. Emergency noclip will expire after 210 ticks.
-		if(memory.stuck > 560 && !memory.usedEmergencyNoclip)
+		if(!memory.usedEmergencyNoclip)
 		{
-			memory.originalNoclip = noclip;
-			noclip = true;
-			memory.usedEmergencyNoclip = true;
-			memory.emergencyUntil = memory.ticks + 210;
-			Printf("Autoplayer: temporary emergency noclip.\n");
+			const AutobotPolicy::RecoveryStep step =
+				AutobotPolicy::RecoveryFor(memory.stuck, memory.detours);
+			if(step == AutobotPolicy::Detour && memory.waypoint >= 0)
+			{
+				memory.blockedCellUntil[memory.waypoint] = memory.ticks + 70 * 8;
+				++memory.detours;
+				memory.stuck = 0;
+				Printf("Autoplayer: detour %u around (%d,%d).\n",
+					memory.detours,
+					memory.waypoint % static_cast<int>(memory.width),
+					memory.waypoint / static_cast<int>(memory.width));
+				memory.waypoint = -1;
+			}
+			else if(step == AutobotPolicy::EmergencyNoclip)
+			{
+				memory.originalNoclip = noclip;
+				noclip = true;
+				memory.usedEmergencyNoclip = true;
+				memory.emergencyUntil = memory.ticks + 210;
+				Printf("Autoplayer: emergency noclip after failed detours.\n");
+			}
 		}
-		else if(memory.stuck > 70 * 180)
+
+		if(memory.failedRecoveryTicks > 70 * 180)
 		{
-			Printf("Autoplayer: emergency advance after repeated obstruction.\n");
+			Printf("Autoplayer: emergency advance after prolonged route failures.\n");
 			playstate = ex_completed;
 		}
-
 	}
+
 }
 
 void Bot_NewGame(const FString &startMap, int difficulty)
@@ -635,6 +684,7 @@ void Bot_NewGame(const FString &startMap, int difficulty)
 		}
 	}
 	memory.seenMap = NULL;
+	failures = FailureHistory();
 }
 
 bool Bot_AdvanceEpisode()
@@ -713,6 +763,37 @@ bool Bot_ResumeAfterDeath()
 		noclip = memory.originalNoclip;
 		memory.usedEmergencyNoclip = false;
 	}
+	// Remember lethal locations across respawns, not world checkpoints.
+	const GameMap::Header &header = map->GetHeader();
+	const unsigned int total = header.width * header.height;
+	if(std::strncmp(failures.mapName, gamestate.mapname, 9) != 0 ||
+		failures.danger.size() != total)
+	{
+		std::strncpy(failures.mapName, gamestate.mapname, 9);
+		failures.mapName[8] = 0;
+		failures.deaths = 0;
+		failures.danger.assign(total, 0);
+	}
+	++failures.deaths;
+	APlayerPawn *deadPawn = players[ConsolePlayer].mo;
+	if(deadPawn)
+	{
+		for(int dy = -1; dy <= 1; ++dy)
+		for(int dx = -1; dx <= 1; ++dx)
+		{
+			const int x = deadPawn->tilex + dx;
+			const int y = deadPawn->tiley + dy;
+			if(x < 0 || y < 0 || x >= static_cast<int>(header.width) ||
+				y >= static_cast<int>(header.height))
+				continue;
+			unsigned char &danger = failures.danger[y * header.width + x];
+			const unsigned int add = dx == 0 && dy == 0 ? 2 : 1;
+			danger = static_cast<unsigned char>(std::min(4U,
+				static_cast<unsigned int>(danger) + add));
+		}
+	}
+	Printf("Autoplayer: learned danger from death %u on %s.\n",
+		failures.deaths, gamestate.mapname);
 	// Invalidate cached navigation even if the next map allocation happens
 	// to reuse the same address after the old map is unloaded.
 	memory.seenMap = NULL;
