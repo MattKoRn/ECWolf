@@ -1,11 +1,64 @@
 #ifndef __WL_AUTOBOT_POLICY_H__
 #define __WL_AUTOBOT_POLICY_H__
 
+#include <climits>
+#include <functional>
+#include <queue>
+#include <utility>
+#include <vector>
+
 // Pure, engine-independent decisions used by the autoplayer. Kept small so
 // they can be regression-tested without shipping proprietary game data.
 namespace AutobotPolicy
 {
 	enum RecoveryStep { KeepTrying, Detour, EmergencyNoclip };
+
+	// Caller supplies an edge cost for each direction; -1 rejects an edge.
+	// This permits door/key checks and moving obstacle checks at every tick.
+	template<class EdgeCost>
+	inline void ComputeRoutes(int width, int height, int start,
+		const EdgeCost &cost, std::vector<int> &distance,
+		std::vector<int> &parent)
+	{
+		if(width <= 0 || height <= 0 || start < 0 || start >= width * height)
+		{
+			distance.clear();
+			parent.clear();
+			return;
+		}
+		const int dx[4] = {1, 0, -1, 0};
+		const int dy[4] = {0, -1, 0, 1};
+		const int total = width * height;
+		distance.assign(total, INT_MAX);
+		parent.assign(total, -1);
+		typedef std::pair<int, int> Node;
+		std::priority_queue<Node, std::vector<Node>, std::greater<Node> > frontier;
+		distance[start] = 0;
+		frontier.push(Node(0, start));
+		while(!frontier.empty())
+		{
+			const Node node = frontier.top();
+			frontier.pop();
+			const int at = node.second;
+			if(node.first != distance[at]) continue;
+			const int x = at % width, y = at / width;
+			for(int dir = 0; dir < 4; ++dir)
+			{
+				const int nx = x + dx[dir], ny = y + dy[dir];
+				if(nx < 0 || ny < 0 || nx >= width || ny >= height)
+					continue;
+				const int next = ny * width + nx;
+				const int step = cost(at, next);
+				if(step <= 0 || distance[at] > INT_MAX - step)
+					continue;
+				const int candidate = distance[at] + step;
+				if(candidate >= distance[next]) continue;
+				distance[next] = candidate;
+				parent[next] = at;
+				frontier.push(Node(candidate, next));
+			}
+		}
+	}
 
 	inline RecoveryStep RecoveryFor(unsigned int stalledTics, unsigned int detours)
 	{
