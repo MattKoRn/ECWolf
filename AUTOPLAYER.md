@@ -26,6 +26,17 @@ The installer stops with an error if required build dependencies are absent
 or CMake fails. The default installation does **not** overwrite an existing
 ECWolf installation.
 
+**Incremental one-click builds:** The initial run compiles the full game and its
+dependencies. Later runs reuse the `build/autoplayer-win64` directory, skip the
+CMake configuration step when settings have not changed, and compile only changed
+source files plus any files that depend on them. The build system automatically
+regenerates its configuration when CMake project files change. The installer
+still refreshes the installed game and desktop shortcut. Do not delete the build
+directory if you want incremental compilation.
+
+To explicitly rerun CMake configuration without discarding compiled files, use
+`powershell -ExecutionPolicy Bypass -File tools\install-autoplayer.ps1 -Reconfigure`.
+
 ## Controls
 
 - **F12** switches the autoplayer on or off during gameplay.
