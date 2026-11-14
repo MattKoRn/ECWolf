@@ -1,5 +1,6 @@
 """Non-proprietary regression tests for the on-device campaign harness."""
 import importlib.util
+import json
 import pathlib
 import tempfile
 import unittest
@@ -26,6 +27,27 @@ with log.open('w', encoding='utf-8') as stream:
         time.sleep(10)
     stream.write('event=campaign_complete map=MAP10 tic=70\\n')
     stream.flush()
+"""
+
+
+# Each fake campaign waits for the other campaign's start marker. A
+# sequential runner will not be able to complete both successfully.
+FAKE_PARALLEL_ENGINE = """import pathlib
+import sys
+import time
+args = sys.argv
+ext = args[args.index('--data') + 1]
+cwd = pathlib.Path.cwd()
+other = cwd.parent / ('Spear' if ext == 'WL6' else 'Wolf') / '.started'
+(cwd / '.started').write_text('ready', encoding='utf-8')
+deadline = time.monotonic() + 1.5
+while not other.exists() and time.monotonic() < deadline:
+    time.sleep(0.01)
+log = pathlib.Path(args[args.index('--autoplay-log') + 1])
+with log.open('w', encoding='utf-8') as stream:
+    stream.write('event=map_start map=MAP01 tic=1\\n')
+    if other.exists():
+        stream.write('event=campaign_complete map=MAP10 tic=70\\n')
 """
 
 
@@ -72,6 +94,35 @@ class HarnessTests(unittest.TestCase):
         self.assertEqual(result["status"], "timeout_incomplete")
         self.assertEqual(result["events"], {})
 
+    def test_completion_event_requires_a_real_map_start(self):
+        stub = self.root / "false_success.py"
+        stub.write_text(
+            "import pathlib, sys\\n"
+            "log = pathlib.Path(sys.argv[sys.argv.index('--autoplay-log')+1])\\n"
+            "log.write_text('event=campaign_complete\\\\n')\\n",
+            encoding="utf-8")
+        result = HARNESS.run_campaign(stub, "wolf3d", self.wolf,
+                                      self.root / "false-report", 3, "MAP01", 0.02)
+        self.assertEqual(result["status"], "exited_incomplete")
+
+    def test_both_campaigns_start_concurrently(self):
+        stub = self.root / "parallel.py"
+        stub.write_text(FAKE_PARALLEL_ENGINE, encoding="utf-8")
+        report_dir = self.root / "parallel-report"
+        code = HARNESS.main(["--engine", str(stub), "--campaign", "both",
+                             "--wolf-data", str(self.wolf),
+                             "--spear-data", str(self.spear),
+                             "--out-dir", str(report_dir), "--minutes", "0.1"])
+        self.assertEqual(code, 0)
+        report = json.loads((report_dir / "summary.json").read_text())
+        self.assertEqual(report["execution_mode"], "parallel")
+        self.assertEqual([entry["campaign"] for entry in report["results"]],
+                         ["wolf3d", "spear"])
+        self.assertTrue(all(entry["status"] == "completed"
+                            for entry in report["results"]))
+        self.assertTrue((report_dir / "wolf3d-events.log").is_file())
+        self.assertTrue((report_dir / "spear-events.log").is_file())
+
     def test_writes_summary_for_both_campaigns(self):
         report_dir = self.root / "summary"
         code = HARNESS.main(["--engine", str(self.engine), "--campaign", "both",
@@ -80,6 +131,8 @@ class HarnessTests(unittest.TestCase):
                              "--out-dir", str(report_dir), "--minutes", "0.1"])
         self.assertEqual(code, 0)
         self.assertTrue((report_dir / "summary.json").is_file())
+        report = json.loads((report_dir / "summary.json").read_text())
+        self.assertEqual(report["execution_mode"], "parallel")
 
 
 if __name__ == "__main__":
