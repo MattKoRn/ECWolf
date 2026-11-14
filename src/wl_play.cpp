@@ -1110,8 +1110,9 @@ void PlayLoop (void)
 		// Show after the first rendered frame, not while the screen is faded.
 		RPG::ShowOfflinePopup();
 
-		// Load only between frames, never during thinker iteration.
-		if (Bot_WantsReload() && Bot_ReloadCheckpoint())
+		// Leave the gameplay loop before restoring a snapshot. GameSave::Load
+		// replaces the entire map and player pawn, so GameLoop must own it.
+		if (Bot_WantsReload())
 		{
 			playstate = ex_abort;
 			break;
