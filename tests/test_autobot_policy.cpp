@@ -49,7 +49,12 @@ int main()
 	assert(RecoveryFor(139, 0) == KeepTrying);
 	assert(RecoveryFor(140, 0) == Detour);
 	assert(RecoveryFor(279, 3) == KeepTrying);
-	assert(RecoveryFor(280, 3) == EmergencyNoclip);
+	assert(RecoveryFor(280, 3) == Detour);
+	assert(RecoveryFor(559, 4) == KeepTrying);
+	assert(RecoveryFor(560, 4) == EmergencyNoclip);
+	assert(!ShouldEmergencyAdvance(70 * 479, 10));
+	assert(!ShouldEmergencyAdvance(70 * 480, 3));
+	assert(ShouldEmergencyAdvance(70 * 480, 4));
 	assert(TravelCost(false, 0) == 10);
 	assert(TravelCost(true, 0) > TravelCost(false, 0));
 	assert(TravelCost(false, 2) > TravelCost(true, 0));
@@ -115,6 +120,20 @@ int main()
 	assert(ObjectivePriority(ExitObjective, 2, false, false, false) == 2);
 	assert(ObjectivePriority(SwitchObjective, 2, false, true, true) <
 		ObjectivePriority(ExitObjective, 2, false, true, true));
+	// Survival-first resources: replenish sooner under danger, but leave
+	// nonurgent supplies behind when a campaign exit is available.
+	assert(SupplyPriority(true, false, 30, 100, 50, 0, 0) == 1);
+	assert(SupplyPriority(true, false, 75, 100, 50, 5, 0) == 1);
+	assert(SupplyPriority(true, false, 75, 100, 50, 0, 2) == 1);
+	assert(SupplyPriority(true, false, 75, 100, 50, 0, 0) == 6);
+	assert(SupplyPriority(false, true, 100, 100, 7, 0, 0) == 1);
+	assert(SupplyPriority(false, true, 100, 100, 12, 5, 0) == 1);
+	assert(SupplyPriority(false, true, 100, 100, 12, 0, 0) == 6);
+	assert(RangedMovementSpeed(1.0, true, 8) == 60);
+	assert(RangedMovementSpeed(2.0, false, 0) == 25);
+	assert(RangedMovementSpeed(3.5, true, 6) == 20);
+	assert(RangedMovementSpeed(3.5, false, 6) == 0);
+	assert(RangedMovementSpeed(6.0, false, 0) == -42);
 	assert(WeaponScore(4, 40, false, 3.0, 1) >
 		WeaponScore(1, 40, false, 3.0, 1));
 	assert(WeaponScore(4, 2, false, 3.0, 1) <
