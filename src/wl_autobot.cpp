@@ -688,33 +688,44 @@ void Bot_SaveCheckpoint()
 bool Bot_WantsReload()
 {
 	if(!BotEnabled || !map || Net::InitVars.mode != Net::MODE_SinglePlayer ||
-		demoplayback || demorecord || playstate != ex_stillplaying)
+		demoplayback || demorecord ||
+		(playstate != ex_stillplaying && playstate != ex_abort) ||
+		!checkpointValid || reloadCount >= 3 ||
+		std::strncmp(checkpointMap, gamestate.mapname, 9) != 0)
 		return false;
 
-	// A dead player must be restored before GameLoop processes the death and
-	// starts replacing pawns. If we have no checkpoint, use normal respawn.
-	const bool died = players[ConsolePlayer].state == player_t::PST_DEAD;
-	return reloadRequested || (died && checkpointValid);
+	// The request is only inspected here. GameSave::Load is not safe to
+	// execute from PlayLoop while its previous map and player are in use.
+	return reloadRequested ||
+		players[ConsolePlayer].state == player_t::PST_DEAD;
 }
 
 bool Bot_ReloadCheckpoint()
 {
-	if(!Bot_WantsReload() || !checkpointValid || reloadCount >= 3 ||
-		std::strncmp(checkpointMap, gamestate.mapname, 9) != 0)
+	// Called by GameLoop only after PlayLoop has fully returned.
+	if(!Bot_WantsReload())
 	{
 		reloadRequested = false;
 		return false;
 	}
 	reloadRequested = false;
 	++reloadCount;
+
+	// Critical: Load calls SetupGameLevel, which checks loadedgame to avoid
+	// resetting the level and respawning actors before deserialization.
+	// The normal load menu sets this flag BEFORE calling GameSave::Load.
+	const bool wasLoaded = loadedgame;
+	loadedgame = true;
+	Printf("Autoplayer: restoring checkpoint (%d/3).\n", reloadCount);
 	if(!GameSave::Load(CHECKPOINT))
 	{
+		loadedgame = wasLoaded;
 		checkpointValid = false;
+		Printf("Autoplayer: checkpoint unavailable; using normal recovery.\n");
 		return false;
 	}
-	Printf("Autoplayer: restored checkpoint (attempt %d/3).\n", reloadCount);
-	// Saved maps and actors are replaced during Load; no old tile cache is safe.
+	// All old map pointers and navigation tiles are now invalid.
 	memory.seenMap = NULL;
-	loadedgame = true;
+	Printf("Autoplayer: checkpoint restored.\n");
 	return true;
 }
