@@ -36,6 +36,7 @@
 #include "wl_inter.h"
 #include "wl_iwad.h"
 #include "wl_play.h"
+#include "wl_autobot.h"
 #include "wl_game.h"
 #include "wl_loadsave.h"
 #include "wl_net.h"
@@ -151,6 +152,7 @@ void NewGame (int difficulty, FString map, bool displayBriefing, FName playerCla
 		gamestate.playerClass[i] = ClassDef::FindClass(playerClassNames[i]);
 
 	levelInfo = &LevelInfo::Find(map);
+	Bot_NewGame(map, difficulty);
 
 	if(displayBriefing)
 		EnterText(levelInfo->Cluster);
@@ -812,6 +814,16 @@ static void DemoLoop()
 			param_tedlevel = NULL;
 			if(GameLoop ())
 				gotoMenu = true;
+
+			// Continue through every installed episode after an ending.
+			while(Bot_AdvanceEpisode())
+			{
+				if(GameLoop())
+				{
+					gotoMenu = true;
+					break;
+				}
+			}
 
 			if(!param_nowait && !gotoMenu)
 			{
