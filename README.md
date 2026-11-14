@@ -33,3 +33,10 @@ Links
 * [Website](http://maniacsvault.net/ecwolf/)
 * [Forums](http://forum.drdteam.org/viewforum.php?f=174)
 * [Wiki](http://maniacsvault.net/ecwolf/wiki/)
+## ECWolf RPG
+
+A persistent, uncapped single-player RPG progression system with offline XP,
+adaptive enemies and an in-game Auto Assign button is available in this fork.
+See [RPG.md](RPG.md) for details. On Windows, run
+`BUILD-AND-INSTALL-RPG.bat` from a Git checkout with submodules to build,
+install and create an **ECWolf RPG** desktop shortcut.
