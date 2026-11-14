@@ -84,17 +84,21 @@ The bot pulses Attack for weapons with `NOAUTOFIRE` (such as the Wolf3D
 pistol), while holding Attack for fully automatic weapons. This avoids
 a pistol firing once and then waiting forever for a button release.
 
-Checkpoint saving and restoration are deferred to frame boundaries in
-`PlayLoop`, never performed inside a thinker tick or during the GameLoop
-death transition. With a valid checkpoint, an auto-player death triggers
-a restoration (up to three retries per map). Without a checkpoint, or
-after exhausting retries, the game follows its normal death/respawn rules.
+Checkpoint saving runs between rendered frames in `PlayLoop`. When
+recovery is needed, `PlayLoop` exits first; only then does `GameLoop`
+restore the snapshot. The `loadedgame` flag is set **before** calling the
+save loader, matching ECWolf's manual loading path and preventing accidental
+new-level initialization during deserialization. A valid checkpoint may be
+restored up to three times per map. Without a checkpoint, or after exhausting
+retries, the bot moves directly into ECWolf's existing death/respawn handling
+rather than idling through a black death screen. RPG account data is separate
+and does not roll back with a map checkpoint.
 
 Manual test scenarios to validate on a machine with licensed game data:
 
 1. Equip the pistol; confirm repeated shots against a living visible enemy.
 2. Equip an automatic weapon; confirm continuous fire while a target is visible.
-3. Die before the first checkpoint; confirm the normal death screen/respawn.
+3. Die before the first checkpoint; confirm immediate engine death/respawn (no checkpoint load).
 4. Die after a checkpoint; confirm one restoration and continued navigation.
 5. Die repeatedly beyond the retry budget; confirm normal death handling.
 6. Stop and resume the bot during death, and change levels after a recovery.
