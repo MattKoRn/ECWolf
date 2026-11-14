@@ -9,11 +9,8 @@
 #include <algorithm>
 #include <cmath>
 #include <climits>
-#include <functional>
-#include <utility>
 #include <cstring>
 #include <cstdlib>
-#include <queue>
 #include <vector>
 
 #include "wl_def.h"
@@ -229,6 +226,23 @@ namespace
 			tile / static_cast<int>(memory.width));
 	}
 
+	struct BotRouteCost
+	{
+		BotRouteCost(APlayerPawn *pawn, int width) : pawn(pawn), width(width) {}
+		int operator()(int from, int to) const
+		{
+			const int fromX = from % width, fromY = from / width;
+			const int x = to % width, y = to / width;
+			if(!CanEnter(x, y, fromX, fromY, pawn))
+				return -1;
+			MapSpot spot = map->GetSpot(x, y, 0);
+			return AutobotPolicy::TravelCost(
+				spot->tile != NULL, memory.deathDanger[to]);
+		}
+		APlayerPawn *pawn;
+		int width;
+	};
+
 	void Consider(Goal &best, const std::vector<int> &dist,
 		int walk, int use, int priority)
 	{
@@ -285,39 +299,9 @@ namespace
 		if(memory.visited[start] < 255)
 			++memory.visited[start];
 
-		// Replan against dynamic geometry and remembered lethal corridors.
-		std::vector<int> distance(total, INT_MAX);
-		std::vector<int> parent(total, -1);
-		typedef std::pair<int, int> Node;
-		std::priority_queue<Node, std::vector<Node>, std::greater<Node> > frontier;
-		distance[start] = 0;
-		frontier.push(Node(0, start));
-		while(!frontier.empty())
-		{
-			const Node node = frontier.top();
-			frontier.pop();
-			const int at = node.second;
-			if(node.first != distance[at])
-				continue;
-			const int x = at % w;
-			const int y = at / w;
-			for(int dir = 0; dir < 4; ++dir)
-			{
-				const int nx = x + DIRX[dir];
-				const int ny = y + DIRY[dir];
-				if(!Inside(nx, ny) || !CanEnter(nx, ny, x, y, pawn))
-					continue;
-				const int next = Index(nx, ny);
-				MapSpot nextSpot = map->GetSpot(nx, ny, 0);
-				const int stepCost = AutobotPolicy::TravelCost(
-					nextSpot->tile != NULL, memory.deathDanger[next]);
-				if(distance[at] + stepCost >= distance[next])
-					continue;
-				distance[next] = distance[at] + stepCost;
-				parent[next] = at;
-				frontier.push(Node(distance[next], next));
-			}
-		}
+		std::vector<int> distance, parent;
+		AutobotPolicy::ComputeRoutes(w, h, start, BotRouteCost(pawn, w),
+			distance, parent);
 
 		Goal best;
 		// 0 = key, 1 = urgent pickups, 2 = exit, 3 = supplies,
