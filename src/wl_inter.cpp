@@ -3,6 +3,7 @@
 #include "wl_def.h"
 #include "wl_menu.h"
 #include "wl_play.h"
+#include "wl_autobot.h"
 #include "id_ca.h"
 #include "id_sd.h"
 #include "id_vl.h"
@@ -324,6 +325,8 @@ static void InterCountRatio(int ratio, unsigned int x, unsigned int y)
 
 static void InterWaitForAck()
 {
+	if(BotEnabled)
+		return;
 	InterState.acked = false;
 	IN_StartAck (ACK_Any);
 	while (!IN_CheckAck ())
@@ -725,7 +728,8 @@ void Victory (bool fromIntermission)
 	VW_UpdateScreen ();
 	VW_FadeIn ();
 
-	IN_Ack (ACK_Any);
+	if(!BotEnabled)
+		IN_Ack (ACK_Any);
 
 	EndText (levelInfo->Cluster);
 
