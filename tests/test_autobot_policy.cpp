@@ -8,6 +8,7 @@
 #include <cassert>
 #include <vector>
 #include <climits>
+#include <string>
 
 struct TestGrid
 {
@@ -187,6 +188,18 @@ int main()
 	unsigned weights[6] = {};
 	RPGLootPolicy::CombatWeights(30, true, weights);
 	assert(weights[1] > weights[4] && weights[2] > weights[0]);
+	unsigned extras[6] = {};
+	RPGLootPolicy::WeightedRemainder(5, weights, extras);
+	unsigned distributed = 0;
+	for(int i = 0; i < 6; ++i) distributed += extras[i];
+	assert(distributed == 5);
+	assert(extras[1] > 0 && extras[2] > 0);
 	RPGLootPolicy::CombatWeights(100, false, weights);
 	assert(weights[0] > weights[4]);
+	RPGLootPolicy::WeightedRemainder(5, weights, extras);
+	distributed = 0;
+	for(int i = 0; i < 6; ++i) distributed += extras[i];
+	assert(distributed == 5);
+	assert(std::string(RPGLootPolicy::RarityName(4)) == "Legendary");
+	assert(std::string(RPGLootPolicy::AffixName(1, 1)) == "Restorative");
 }

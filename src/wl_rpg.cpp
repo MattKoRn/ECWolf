@@ -447,12 +447,12 @@ void ShowProfile() {
         << "  Agility " << Compact(profile.stat[Agility]) << "\n"
         << "Smart auto-spend: " << (profile.autoSpend ? "ON" : "OFF") << "\n"
         << "RPG HUD: " << (profile.showHud ? "ON" : "OFF") << "\n"
-        << "Weapon: " << (profile.equipment[0].rarity ? "equipped" : "none")
-        << " tier " << profile.equipment[0].rarity << " affix "
-        << profile.equipment[0].affix << " power " << profile.equipment[0].power << "\n"
-        << "Armor: " << (profile.equipment[1].rarity ? "equipped" : "none")
-        << " tier " << profile.equipment[1].rarity << " affix "
-        << profile.equipment[1].affix << " power " << profile.equipment[1].power << "\n"
+        << "Weapon: " << RPGLootPolicy::RarityName(profile.equipment[0].rarity)
+        << " " << RPGLootPolicy::AffixName(0, profile.equipment[0].affix)
+        << " +" << profile.equipment[0].power << "\n"
+        << "Armor: " << RPGLootPolicy::RarityName(profile.equipment[1].rarity)
+        << " " << RPGLootPolicy::AffixName(1, profile.equipment[1].affix)
+        << " +" << profile.equipment[1].power << "\n"
         << "Saved to Documents/ECWolfRPG";
     Message(msg.str().c_str());
     IN_Ack(ACK_Local);
@@ -489,13 +489,13 @@ void SmartAutoAssign() {
     for(int i = 0; i < StatCount; ++i) total += weights[i];
     BigNumber share = profile.points;
     unsigned remainder = share.DivideSmall(total);
+    unsigned extras[StatCount];
+    RPGLootPolicy::WeightedRemainder(remainder, weights, extras);
     for(int i = 0; i < StatCount; ++i) {
         BigNumber portion = share;
         portion.MultiplySmall(weights[i]);
         profile.stat[i].Add(portion);
-        const unsigned extra = std::min(weights[i], remainder);
-        profile.stat[i].Add(BigNumber(extra));
-        remainder -= extra;
+        profile.stat[i].Add(BigNumber(extras[i]));
     }
     profile.points = BigNumber(0);
     SaveProfile();
@@ -515,7 +515,8 @@ const char *HudLine() {
     msg << "RPG Lv" << Compact(profile.level) << " XP" << Compact(profile.xp)
         << " P" << Compact(profile.points);
     if(profile.equipment[0].rarity)
-        msg << " | Weapon T" << profile.equipment[0].rarity
+        msg << " | " << RPGLootPolicy::RarityName(profile.equipment[0].rarity)
+            << " " << RPGLootPolicy::AffixName(0, profile.equipment[0].affix)
             << "+" << profile.equipment[0].power;
     line = msg.str();
     return line.c_str();
@@ -555,8 +556,10 @@ void OnEnemyDeath(AActor *actor) {
     current.rarity = rarity;
     current.power = power;
     current.affix = affix;
-    Printf("RPG: found and equipped tier %u %s relic (affix %u, power %u).\n",
-        rarity, slot == 0 ? "weapon" : "armor", affix, power);
+    Printf("RPG: equipped %s %s %s relic (+%u).\n",
+        RPGLootPolicy::RarityName(rarity),
+        RPGLootPolicy::AffixName(slot, affix),
+        slot == 0 ? "weapon" : "armor", power);
     SaveProfile();
 }
 unsigned OutgoingDamage(unsigned damage, const AActor *attacker) {

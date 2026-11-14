@@ -86,7 +86,7 @@ MENU_LISTENER(BotCheatToggle)
 }
 MENU_LISTENER(RPGSpendPoint)
 {
-	RPG::AddStat(static_cast<RPG::Stat>(which - 2));
+	RPG::AddStat(static_cast<RPG::Stat>(which - 5));
 	RPG::ShowProfile();
 	return true;
 }

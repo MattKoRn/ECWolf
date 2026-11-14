@@ -26,7 +26,6 @@
 #include "wl_play.h"
 #include "wl_autobot.h"
 #include "wl_rpg.h"
-#include "wl_rpg.h"
 #include "g_mapinfo.h"
 #include "a_inventory.h"
 #include "am_map.h"
