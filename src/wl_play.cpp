@@ -1067,7 +1067,6 @@ void PlayLoop (void)
 		IN_StartAck (ACK_Local);
 
 	StatusBar->NewGame();
-	RPG::ShowOfflinePopup();
 
 	do
 	{
@@ -1105,6 +1104,8 @@ void PlayLoop (void)
 		}
 
 		PlayFrame();
+		// Show after the first rendered frame, not while the screen is faded.
+		RPG::ShowOfflinePopup();
 
 		// Load only between frames, never during thinker iteration.
 		if (Bot_WantsReload() && Bot_ReloadCheckpoint())
