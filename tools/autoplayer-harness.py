@@ -96,7 +96,11 @@ def run_campaign(engine, campaign, data_dir, out_dir, seconds, start_map,
     death_count = sum(1 for line in event_lines if
                       "event=failure" in line.split() and
                       "detail=player_death" in line.split())
-    if completed:
+    # A scripted emergency level advance is not evidence of a genuine
+    # full campaign playthrough, even if the final episode eventually ends.
+    if completed and counts.get("emergency_advance", 0):
+        status = "completed_with_skipped_maps"
+    elif completed:
         status = "completed"
     elif timed_out:
         status = "timeout_incomplete"
