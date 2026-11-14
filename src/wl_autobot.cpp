@@ -26,6 +26,7 @@
 #include "gamemap.h"
 #include "g_mapinfo.h"
 #include "g_shared/a_keys.h"
+#include "g_shared/a_inventory.h"
 #include "lnspec.h"
 
 bool BotEnabled = false;
@@ -278,10 +279,18 @@ namespace
 				continue;
 
 			const int tile = Index(actor->tilex, actor->tiley);
-			bool key = actor->GetClass()->IsDescendantOf(NATIVE_CLASS(Key));
-			const int priority = key ? 0 : (pawn->health < 65 ? 1 : 3);
-			if(key || pawn->health < 65 || (distance[tile] >= 0 &&
-				distance[tile] <= 7))
+			const ClassDef *cls = actor->GetClass();
+			const bool key = cls->IsDescendantOf(NATIVE_CLASS(Key));
+			const bool healing = cls->IsDescendantOf(NATIVE_CLASS(Health));
+			const bool ammunition = cls->IsDescendantOf(NATIVE_CLASS(Ammo)) ||
+				cls->IsDescendantOf(NATIVE_CLASS(Weapon));
+			const bool lowAmmo = pawn->player->ReadyWeapon &&
+				pawn->player->ReadyWeapon->ammo[0] &&
+				pawn->player->ReadyWeapon->ammo[0]->amount < 8;
+			const int priority = key ? 0 :
+				(healing && pawn->health < 65) || (ammunition && lowAmmo) ? 1 : 3;
+			if(key || (healing && pawn->health < pawn->maxhealth) ||
+				(ammunition && distance[tile] >= 0 && distance[tile] <= 7))
 				Consider(best, distance, tile, -1, priority);
 		}
 
@@ -414,6 +423,15 @@ namespace
 		hasTarget = true;
 		if(TurnToward(pawn, cmd, target->x, target->y, 9))
 		{
+			if(pawn->player->ReadyWeapon &&
+				!pawn->player->ReadyWeapon->CheckAmmo(AWeapon::PrimaryFire, false))
+			{
+				// Avoid firing empty ranged weapons. Cycle inventory instead.
+				if(memory.ticks % 18 == 0)
+					cmd.buttonstate[bt_nextweapon] = true;
+				cmd.controly = 30;
+				return;
+			}
 			cmd.buttonstate[bt_attack] = true;
 			cmd.controly = 0;
 			// Keep away from close melee enemies when shooting.
