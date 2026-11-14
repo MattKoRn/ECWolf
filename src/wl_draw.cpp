@@ -20,6 +20,7 @@
 #include "g_mapinfo.h"
 #include "lumpremap.h"
 #include "wl_agent.h"
+#include "wl_autobot.h"
 #include "wl_draw.h"
 #include "wl_game.h"
 #include "wl_net.h"
@@ -1136,6 +1137,10 @@ void WallRefresh (void)
 	angle_t bobangle = ((gamestate.TimeCount<<13)/(20*TICRATE/35)) & FINEMASK;
 	const fixed playerMovebob = players[ConsolePlayer].mo->GetClass()->Meta.GetMetaFixed(APMETA_MoveBob);
 	fixed curbob = gamestate.victoryflag ? 0 : FixedMul(FixedMul(players[ConsolePlayer].bob, playerMovebob)>>1, finesine[bobangle]);
+	// Autoplay at high movement speed can make the camera bounce rapidly.
+	// Smooth only the visual bob, not player movement or manual gameplay.
+	if(BotEnabled && Net::InitVars.mode == Net::MODE_SinglePlayer)
+		curbob /= 4;
 
 	viewz = curbob - players[ConsolePlayer].mo->viewheight;
 
