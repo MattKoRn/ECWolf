@@ -51,9 +51,9 @@ To explicitly rerun CMake configuration without discarding compiled files, use
 - Prioritizes keys, urgent health/ammo, exits, switches, and reachable monsters; unsuccessful exit attempts are cooled down so boss-gated objectives can be pursued.
 - Operates normal player movement, Use, and Attack inputs rather than
   teleporting in normal play.
-- Fights visible monsters with tighter aim, threat-aware strafing, learned-death-location avoidance, and stronger backsteps at low health. With a melee weapon, the bot pushes into striking range and attacks while closing the last gap.
-- Treats health and ammunition as urgent sooner when local threats or repeated deaths raise risk; low-risk supplies remain secondary to exits.
-- During F12 auto-play, the renderer scales camera movement bob and weapon bob to 25% of normal, reducing rapid visual shaking. Turning, damage, collisions and manual-play visuals are unchanged.
+- Fights visible monsters with tighter aim, threat-aware strafing, learned-death-location avoidance, and stronger backsteps at low health. With a melee weapon, the bot approaches into actual knife range, tracks the target throughout the swing, and gives NOAUTOFIRE knives a timed press/release attack burst **as soon as the target is lined up**, rather than waiting for an arbitrary global tick.
+- Treats health and ammunition as urgent sooner when local threats or repeated deaths raise risk. **All reachable enemy-dropped ammo and ammo-giving weapons are prioritized before exits** when the player has room to collect their ammo. Already-full ammo types are skipped so the bot does not loop on uncollectable drops; other low-risk supplies remain secondary to exits. Drops are collected by normal movement, never teleported into inventory.
+- During F12 auto-play, the renderer scales camera movement bob and weapon bob to **10% of normal** (previously 25%), reducing rapid visual shaking further. Turning, damage, collisions and manual-play visuals are unchanged.
 - On unattended death, restarts the level with ECWolf's native respawn flow (not world snapshots), remembers lethal tiles, and adopts more cautious movement after repeat deaths. The account-wide RPG profile still persists independently.
 - On movement failure, temporarily blocks the obstructed waypoint and tries alternate routes. Temporary noclip now requires at least four failed detours plus an eight-second sustained stall after those retries. An **emergency level advance** requires eight minutes of persistent failure and at least four recorded recovery failures. These logged fallbacks are not cheat-free and should never be confused with normal exit completion.
 - Attempts to continue into the next available episode after an episode
@@ -68,7 +68,7 @@ require additional handling. Route selection is tile-based and only heuristicall
 current map without consuming a finite life while the bot is enabled;
 scripted level skipping may occur as a last resort.
 
-The standalone C++ regression suite in `tests/test_autobot_policy.cpp` checks route costs, recovery escalation, strafing clearance decisions, and firing ranges. Run it locally with:
+The standalone C++ regression suite in `tests/test_autobot_policy.cpp` checks route costs, recovery escalation, strafing clearance decisions, firing ranges, knife attack press/release timing, enemy-drop priority, and reduced camera bob. Run it locally with:
 
 ```text
 cmake -S tests -B build/autoplayer-policy
