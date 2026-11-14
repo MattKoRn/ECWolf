@@ -251,7 +251,7 @@ namespace AutobotPolicy
 	inline bool ShouldShoot(double distanceTiles, bool melee)
 	{
 		// A little margin below engine melee range avoids whiffing.
-		return distanceTiles <= (melee ? 0.92 : 5.5);
+		return distanceTiles <= (melee ? 1.05 : 5.5);
 	}
 }
 
