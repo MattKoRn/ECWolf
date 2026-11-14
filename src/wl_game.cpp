@@ -840,6 +840,19 @@ restartgame:
 		StopMusic ();
 		ingame = false;
 
+		// Only now is it safe for an unattended checkpoint load to replace
+		// the map, thinker list and player. Never load from inside PlayLoop.
+		if(playstate == ex_abort && Bot_WantsReload() && !Bot_ReloadCheckpoint())
+		{
+			// If a checkpoint cannot be restored after death, hand control to
+			// the engine's normal death/reborn handling instead of staying black.
+			if(players[ConsolePlayer].state == player_t::PST_DEAD)
+			{
+				players[ConsolePlayer].state = player_t::PST_ENTER;
+				playstate = ex_died;
+			}
+		}
+
 		if (demorecord && playstate != ex_warped)
 			FinishDemoRecord ();
 
