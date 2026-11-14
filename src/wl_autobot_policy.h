@@ -60,6 +60,7 @@ namespace AutobotPolicy
 		}
 	}
 
+
 	inline RecoveryStep RecoveryFor(unsigned int stalledTics, unsigned int detours)
 	{
 		if(stalledTics >= 280 && detours >= 3)
@@ -83,6 +84,77 @@ namespace AutobotPolicy
 		if(positiveClear) return 1;
 		if(negativeClear) return -1;
 		return 0;
+	}
+
+	// A living monster applies a local, decaying risk value. Risk is
+	// intentionally a cost, never a wall: the bot can still engage enemies.
+	inline unsigned int LocalThreat(int dx, int dy, unsigned int toughness)
+	{
+		if(dx < 0) dx = -dx;
+		if(dy < 0) dy = -dy;
+		const int distance = dx + dy;
+		if(distance > 4) return 0;
+		return static_cast<unsigned int>(5 - distance) +
+			(toughness >= 80 ? 2U : 0U);
+	}
+
+	inline int ThreatAwareCost(bool closed, bool moving, bool pushwall,
+		unsigned int deathDanger, unsigned int nearbyThreat,
+		bool lowHealth)
+	{
+		const int base = TravelCost(closed, deathDanger);
+		if(nearbyThreat > 12) nearbyThreat = 12;
+		return base + static_cast<int>(nearbyThreat) * (lowHealth ? 14 : 6) +
+			(moving ? (pushwall ? 65 : 32) : 0);
+	}
+
+	enum ObjectiveKind { KeyObjective, UrgentObjective, ExitObjective,
+		SwitchObjective, EnemyObjective, SupplyObjective, ExploreObjective };
+
+	// After repeat failures, switches and surviving enemies are treated as
+	// potential prerequisites of the exit. Keys stay highest priority.
+	inline int ObjectivePriority(ObjectiveKind kind, unsigned int failedExits,
+		bool missingKey, bool activeSwitches, bool livingEnemies)
+	{
+		switch(kind)
+		{
+			case KeyObjective: return 0;
+			case UrgentObjective: return 1;
+			case ExitObjective:
+				return (failedExits >= 2 &&
+					(missingKey || activeSwitches || livingEnemies)) ? 5 : 2;
+			case SwitchObjective: return 3;
+			case EnemyObjective: return 4;
+			case SupplyObjective: return 6;
+			case ExploreObjective: return 7;
+		}
+		return 7;
+	}
+
+	inline int WeaponScore(int slot, unsigned int ammo, bool melee,
+		double distanceTiles, unsigned int threat)
+	{
+		if(melee)
+			return distanceTiles < 1.4 && threat < 5 ? 30 : -1000;
+		if(ammo == 0) return -1000;
+		int score = 30 + slot * 8;
+		if(ammo < 5) score -= 70;
+		else if(ammo < 12) score -= 25;
+		if(distanceTiles > 4.0 && slot <= 1) score -= 15;
+		if(distanceTiles < 1.5 && slot >= 5) score -= 25;
+		return score;
+	}
+
+	inline int ThreatDodgeDirection(unsigned int ticks,
+		bool positiveClear, bool negativeClear,
+		unsigned int positiveDanger, unsigned int negativeDanger)
+	{
+		if(!positiveClear && !negativeClear) return 0;
+		if(!positiveClear) return -1;
+		if(!negativeClear) return 1;
+		if(positiveDanger < negativeDanger) return 1;
+		if(negativeDanger < positiveDanger) return -1;
+		return StrafeDirection(ticks, positiveClear, negativeClear);
 	}
 
 	inline bool ShouldShoot(double distanceTiles, bool melee)
