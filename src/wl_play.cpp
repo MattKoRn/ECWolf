@@ -25,6 +25,7 @@
 #include "wl_net.h"
 #include "wl_play.h"
 #include "wl_autobot.h"
+#include "wl_rpg.h"
 #include "g_mapinfo.h"
 #include "a_inventory.h"
 #include "am_map.h"
@@ -1066,6 +1067,7 @@ void PlayLoop (void)
 		IN_StartAck (ACK_Local);
 
 	StatusBar->NewGame();
+	RPG::ShowOfflinePopup();
 
 	do
 	{
@@ -1088,6 +1090,7 @@ void PlayLoop (void)
 			if(!Paused)
 			{
 				++gamestate.TimeCount;
+				RPG::Tick();
 
 				CheckSpawnPlayer();
 
