@@ -53,7 +53,9 @@ To explicitly rerun CMake configuration without discarding compiled files, use
 - Operates normal player movement, Use, and Attack inputs rather than
   teleporting in normal play.
 - Attempts to fight currently visible monsters before pursuing navigation.
-- Saves a rolling checkpoint and can reload it after obstruction or death.
+- On unattended death, restarts the current level using ECWolf's native respawn
+  flow instead of reloading a world snapshot. The account-wide RPG profile
+  still saves automatically and persists between sessions.
 - After repeated failed recovery, allows temporary noclip and ultimately
   an **emergency level advance**. These bypass rules **only** after the
   bot has failed to navigate normally. Do not enable autopilot if you want
@@ -67,8 +69,9 @@ To explicitly rerun CMake configuration without discarding compiled files, use
 particular, mod-specific trigger scripting, boss-dependent exits, moving
 pushwalls, timed puzzles, inventory decisions, and unusual key mechanics can
 require additional handling. Route selection is tile-based and does not
-yet model dynamic threats or guaranteed survivability. Checkpoint retries
-are limited; scripted level skipping may occur as a last resort.
+yet model dynamic threats or guaranteed survivability. Death restarts the
+current map without consuming a finite life while the bot is enabled;
+scripted level skipping may occur as a last resort.
 
 Automated compiler checks are defined in
 `.github/workflows/autoplayer-windows.yml` and
@@ -84,24 +87,25 @@ The bot pulses Attack for weapons with `NOAUTOFIRE` (such as the Wolf3D
 pistol), while holding Attack for fully automatic weapons. This avoids
 a pistol firing once and then waiting forever for a button release.
 
-Checkpoint saving runs between rendered frames in `PlayLoop`. When
-recovery is needed, `PlayLoop` exits first; only then does `GameLoop`
-restore the snapshot. The `loadedgame` flag is set **before** calling the
-save loader, matching ECWolf's manual loading path and preventing accidental
-new-level initialization during deserialization. A valid checkpoint may be
-restored up to three times per map. Without a checkpoint, or after exhausting
-retries, the bot moves directly into ECWolf's existing death/respawn handling
-rather than idling through a black death screen. RPG account data is separate
-and does not roll back with a map checkpoint.
+The auto-player deliberately does **not** load or create automatic world
+checkpoints. A previous death-recovery path replaced the map and player with
+a deserialized snapshot and was associated with black-screen crashes. Now the
+bot exits `PlayLoop` with `ex_died` and ECWolf's own `Died()` /
+`CheckSpawnPlayer()` machinery restarts the current level. Normal manual
+save/load remains available. During unattended play the bot does not spend
+finite lives, so repeated deaths do not end the run. Player health, position
+and map progress reset upon death; the permanent `Documents/ECWolfRPG`
+profile continues to autosave independently.
 
 Manual test scenarios to validate on a machine with licensed game data:
 
 1. Equip the pistol; confirm repeated shots against a living visible enemy.
 2. Equip an automatic weapon; confirm continuous fire while a target is visible.
-3. Die before the first checkpoint; confirm immediate engine death/respawn (no checkpoint load).
-4. Die after a checkpoint; confirm one restoration and continued navigation.
-5. Die repeatedly beyond the retry budget; confirm normal death handling.
-6. Stop and resume the bot during death, and change levels after a recovery.
+3. Die early in a level; confirm engine respawn with no checkpoint loading.
+4. Die after clearing part of the map; confirm it restarts the current map.
+5. Die repeatedly; confirm the bot resumes and doesn't hit a game-over screen.
+6. Turn off the bot with F12; confirm ordinary player death remains unchanged.
+7. Confirm the permanent RPG profile is unchanged and still autosaves after death.
 
 These are regression scenarios, not a claim of an automated full playthrough.
 
