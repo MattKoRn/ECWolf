@@ -4,6 +4,7 @@
  * integer conversions are bounded only where ECWolf's fixed-size engine requires it.
  */
 #include "wl_rpg.h"
+#include "wl_rpg_progression.h"
 
 #include <algorithm>
 #include <cmath>
@@ -226,10 +227,7 @@ std::string Documents() {
 }
 
 BigNumber RequiredXP() {
-    BigNumber required = profile.level;
-    required.MultiplySmall(40);
-    required.Add(BigNumber(100));
-    return required;
+    return RPGProgression::RequiredXPForLevel(profile.level);
 }
 void FinishLevels(unsigned int workBudget) {
     for(unsigned int i = 0; i < workBudget; ++i) {
