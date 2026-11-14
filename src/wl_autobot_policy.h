@@ -169,6 +169,15 @@ namespace AutobotPolicy
 		return autoPlaying ? bob / 4 : bob;
 	}
 
+	// Wolf3D Knife inherits an ammo type from WolfWeapon but overrides
+	// primary ammouse to zero. Checking only null ammo slots mislabels it
+	// as a firearm and triggers retreat instead of a close-range strike.
+	inline bool IsMeleeWeapon(bool hasPrimaryAmmo, bool hasAltAmmo,
+		unsigned int primaryAmmoUse)
+	{
+		return (!hasPrimaryAmmo && !hasAltAmmo) || primaryAmmoUse == 0;
+	}
+
 	inline int MeleeApproachSpeed(double distanceTiles)
 	{
 		if(distanceTiles > 1.0) return -68;
