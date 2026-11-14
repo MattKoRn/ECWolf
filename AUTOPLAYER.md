@@ -11,8 +11,10 @@ for single-player Wolfenstein 3D, Spear of Destiny, and ECWolf-compatible maps.
    2019 and 2026 with C++ tools are also supported by the launcher.
 2. Obtain a recursive clone:
    `git clone --recursive https://github.com/MattKoRn/ECWolf.git`
-3. Double-click **BUILD-AND-INSTALL-AUTOPLAYER.bat**.
-4. The installer builds a Release engine, installs it to
+3. Double-click **BUILD-AND-INSTALL-AUTOPLAYER.bat**. If you already cloned
+   the repository, run `git pull --ff-only` first to get installer fixes.
+4. The installer builds a Release engine using bundled SDL_mixer codecs (including
+   OpusFile, without requiring a separate OpusFile installation), installs it to
    `%LOCALAPPDATA%\Programs\ECWolf Autoplayer`, and creates
    **ECWolf Autoplayer.lnk** on your desktop.
 5. Supply your legally owned Wolfenstein 3D / Spear of Destiny game data. Game
@@ -69,8 +71,11 @@ data is required to validate gameplay.
 
 - If the game reports missing data: provide the original game's data files
   (ECWolf itself cannot supply them).
-- If CMake fails to find SDL: run `git submodule sync --recursive` and
-  `git submodule update --init --recursive`.
+- If CMake fails to find SDL or a bundled codec: run
+  `git submodule sync --recursive` and `git submodule update --init --recursive`.
+  The installer runs both commands automatically. If you still see the old
+  `Could NOT find OpusFile` error after updating, remove
+  `build/autoplayer-win64/CMakeCache.txt` and rerun the batch file.
 - If a moving wall, locked door, or mod-specific puzzle traps the bot, disable
   it with **F12**, resolve the obstacle, and re-enable it.
 - If automatic recovery is undesirable, keep autopilot off or adjust the
