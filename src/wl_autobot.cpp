@@ -700,6 +700,31 @@ bool Bot_WantsReload()
 		players[ConsolePlayer].state == player_t::PST_DEAD;
 }
 
+
+bool Bot_ResumeAfterDeath()
+{
+	if(!BotEnabled || !map || Paused ||
+		Net::InitVars.mode != Net::MODE_SinglePlayer ||
+		demoplayback || demorecord || playstate != ex_stillplaying ||
+		players[ConsolePlayer].state != player_t::PST_DEAD ||
+		Bot_WantsReload())
+		return false;
+
+	// If a checkpoint is missing or the retry budget has been exhausted,
+	// bypass the unattended death fade and use the existing engine Died()
+	// flow. No load, no synthetic player spawn, no dead-pawn dereference.
+	if(memory.usedEmergencyNoclip)
+	{
+		noclip = memory.originalNoclip;
+		memory.usedEmergencyNoclip = false;
+	}
+	reloadRequested = false;
+	players[ConsolePlayer].state = player_t::PST_ENTER;
+	playstate = ex_died;
+	Printf("Autoplayer: no usable checkpoint; restarting via normal death flow.\\n");
+	return true;
+}
+
 bool Bot_ReloadCheckpoint()
 {
 	// Called by GameLoop only after PlayLoop has fully returned.
