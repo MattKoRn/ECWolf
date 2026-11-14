@@ -1104,6 +1104,9 @@ void PlayLoop (void)
 		}
 
 		PlayFrame();
+		// Checkpoint saves and loads modify the map/render state. Keep both
+		// outside PollControls and the thinker loop, including death recovery.
+		Bot_SaveCheckpoint();
 		// Show after the first rendered frame, not while the screen is faded.
 		RPG::ShowOfflinePopup();
 
