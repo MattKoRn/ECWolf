@@ -229,6 +229,14 @@ namespace AutobotPolicy
 		return aligned && inRange && (attackTics % 15) < 3;
 	}
 
+	// Wolf Knife and Knife2 use random(0,15) damage. An otherwise valid
+	// strike can therefore cause zero damage. Only during auto-play do
+	// we make such a hit deal at least one point of base damage.
+	inline int AutoPlayKnifeDamage(int damage, bool autoPlayingKnife)
+	{
+		return autoPlayingKnife && damage == 0 ? 1 : damage;
+	}
+
 	// Wolf3D Knife inherits an ammo type from WolfWeapon but overrides
 	// primary ammouse to zero. Checking only null ammo slots mislabels it
 	// as a firearm and triggers retreat instead of a close-range strike.
