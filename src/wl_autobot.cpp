@@ -381,8 +381,9 @@ namespace
 		if(best.walk == -1)
 		{
 			++memory.noGoalTicks;
-			// Emergency mode is deliberately a last resort, not normal routing.
-			if(memory.noGoalTicks > 70 * 180 && reloadCount >= 2)
+			// Once all reachable alternatives and blocked-door retries fail,
+			// avoid an infinite idle loop even when no checkpoint was loaded.
+			if(memory.noGoalTicks > 70 * 180)
 			{
 				Printf("Autoplayer: emergency level advance (%s).\n",
 					gamestate.mapname);
