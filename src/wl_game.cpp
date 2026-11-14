@@ -658,6 +658,17 @@ void PlayDemo (int demonumber)
 
 void Died (void)
 {
+	if(BotEnabled && Net::InitVars.mode == Net::MODE_SinglePlayer)
+	{
+		// An unattended run must never return to a black game-over screen.
+		// Respawn the player via the existing engine path without consuming
+		// finite lives. The separate RPG profile remains persisted to disk.
+		if(gamestate.difficulty->LivesCount >= 0 && players[0].lives < 0)
+			players[0].lives = 0;
+		players[0].state = player_t::PST_REBORN;
+		return;
+	}
+
 	if (screenfaded)
 	{
 		ThreeDRefresh ();
@@ -824,9 +835,6 @@ restartgame:
 
 		PlayLoop ();
 
-		// PlayLoop only requests recovery; restore below after the playback
-		// loop has finished and normal gameplay has been suspended.
-
 		if(playstate == ex_victorious)
 		{
 			if(gameinfo.VictoryPic.IsNotEmpty())
@@ -839,19 +847,6 @@ restartgame:
 
 		StopMusic ();
 		ingame = false;
-
-		// Only now is it safe for an unattended checkpoint load to replace
-		// the map, thinker list and player. Never load from inside PlayLoop.
-		if(playstate == ex_abort && Bot_WantsReload() && !Bot_ReloadCheckpoint())
-		{
-			// If a checkpoint cannot be restored after death, hand control to
-			// the engine's normal death/reborn handling instead of staying black.
-			if(players[ConsolePlayer].state == player_t::PST_DEAD)
-			{
-				players[ConsolePlayer].state = player_t::PST_ENTER;
-				playstate = ex_died;
-			}
-		}
 
 		if (demorecord && playstate != ex_warped)
 			FinishDemoRecord ();
