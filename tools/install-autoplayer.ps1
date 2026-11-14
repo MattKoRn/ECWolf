@@ -9,15 +9,40 @@ $ErrorActionPreference = "Stop"
 Set-StrictMode -Version Latest
 
 function Run-Checked {
-    param([string] $Exe, [string[]] $Arguments)
-    & $Exe @Arguments
-    if ($LASTEXITCODE -ne 0) {
-        throw "$Exe failed with exit code $LASTEXITCODE."
+    param(
+        [string] $Exe,
+        [string[]] $Arguments,
+        [string] $Stage = "command"
+    )
+
+    # Keep output visible while retaining the actual CMake/compiler errors.
+    # Native programs can send normal diagnostics to stderr; do not treat
+    # their stderr stream as a PowerShell terminating error.
+    $ErrorActionPreference = "Continue"
+    $logPath = Join-Path $script:logDirectory "$Stage.log"
+    & $Exe @Arguments 2>&1 | Tee-Object -FilePath $logPath
+    $exitCode = $LASTEXITCODE
+
+    if ($exitCode -ne 0) {
+        $highlights = @(
+            Select-String -LiteralPath $logPath -Pattern "CMake Error", "Could NOT find", "fatal error", "error C[0-9]+:", "error MSB[0-9]+:", "error LNK[0-9]+:", "NOTFOUND" |
+                Select-Object -First 5 |
+                ForEach-Object { $_.Line.Trim() }
+        )
+        $detail = if ($highlights.Count -gt 0) {
+            "Key diagnostic lines:`n" + ($highlights -join "`n") + "`n"
+        }
+        else {
+            "See the output immediately above for the underlying failure.`n"
+        }
+        throw "$Exe failed during '$Stage' (exit code $exitCode).`n$detail" + "Full log: $logPath"
     }
 }
 
 $repo = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 $build = Join-Path $repo "build\autoplayer-win64"
+$script:logDirectory = Join-Path $repo "build\autoplayer-logs"
+New-Item -ItemType Directory -Path $script:logDirectory -Force | Out-Null
 if (-not $InstallRoot) {
     $InstallRoot = Join-Path $env:LOCALAPPDATA "Programs\ECWolf Autoplayer"
 }
@@ -50,8 +75,8 @@ Write-Host "=== ECWolf Autoplayer: preparing source ==="
 if (-not (Test-Path (Join-Path $repo ".git"))) {
     throw "Use a Git clone of this repository with submodules. ZIP archives omit required SDL submodules."
 }
-Run-Checked "git" @("-C", $repo, "submodule", "sync", "--recursive")
-Run-Checked "git" @("-C", $repo, "submodule", "update", "--init", "--recursive")
+Run-Checked "git" @("-C", $repo, "submodule", "sync", "--recursive") -Stage "submodule-sync"
+Run-Checked "git" @("-C", $repo, "submodule", "update", "--init", "--recursive") -Stage "submodule-update"
 
 # CMake/Visual Studio incremental builds reuse compiled object files. Skip the
 # configure pass for matching settings; the generated ZERO_CHECK target still
@@ -112,7 +137,7 @@ if ($needsConfigure) {
         "-DINTERNAL_SDL=ON", "-DINTERNAL_SDL_MIXER=ON", "-DINTERNAL_SDL_NET=ON",
         # Use bundled codecs instead of requiring a system OpusFile installation.
         "-DINTERNAL_SDL_MIXER_CODECS=ON"
-    )
+    ) -Stage "configure"
 }
 else {
     Write-Host "=== Reusing existing CMake configuration ==="
@@ -120,9 +145,9 @@ else {
 
 Write-Host "=== Incremental compilation (only changed sources and dependencies) ==="
 # No --clean-first: the build tool recompiles changed sources and affected dependencies.
-Run-Checked "cmake" @("--build", $build, "--config", "Release", "--parallel")
+Run-Checked "cmake" @("--build", $build, "--config", "Release", "--parallel") -Stage "build"
 Write-Host "=== Installing to $InstallRoot ==="
-Run-Checked "cmake" @("--install", $build, "--config", "Release", "--prefix", $InstallRoot)
+Run-Checked "cmake" @("--install", $build, "--config", "Release", "--prefix", $InstallRoot) -Stage "install"
 
 # Commercial game data is never bundled; optionally copy the user's own data.
 if ($GameDataPath) {
