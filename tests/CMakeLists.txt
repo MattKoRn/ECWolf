@@ -1,0 +1,6 @@
+cmake_minimum_required(VERSION 3.10)
+project(ECWolfAutoplayerPolicyTests LANGUAGES CXX)
+enable_testing()
+add_executable(autoplayer_policy_test test_autobot_policy.cpp)
+set_target_properties(autoplayer_policy_test PROPERTIES CXX_STANDARD 11 CXX_STANDARD_REQUIRED YES)
+add_test(NAME autoplayer_policy COMMAND autoplayer_policy_test)
