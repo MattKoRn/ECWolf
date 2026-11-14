@@ -824,8 +824,8 @@ restartgame:
 
 		PlayLoop ();
 
-		// Restore snapshots in PlayLoop at a safe frame boundary, not during
-		// death/respawn transitions here in GameLoop.
+		// PlayLoop only requests recovery; restore below after the playback
+		// loop has finished and normal gameplay has been suspended.
 
 		if(playstate == ex_victorious)
 		{
