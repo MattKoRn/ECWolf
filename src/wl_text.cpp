@@ -729,6 +729,9 @@ void DrawMultiLineText(const FString str, FFont *font, EColorRange color, ETSAli
 // Helphack switches index 11 and 5 so that the keyboard/blaze pics are reversed.
 static void ShowArticle (const char *article, bool helphack=false)
 {
+	// Prevent multi-page ending/briefing texts from stopping unattended runs.
+	if(BotEnabled)
+		return;
 	bool newpage, firstpage;
 	ControlInfo ci;
 
@@ -862,7 +865,8 @@ static bool ShowText(const FString exitText, const FString flat, const FString m
 			Message (exitText);
 
 			IN_ClearKeysDown ();
-			IN_Ack (ACK_Any);
+			if(!BotEnabled)
+				IN_Ack (ACK_Any);
 			return false;
 	
 		case ClusterInfo::EXIT_LUMP:
