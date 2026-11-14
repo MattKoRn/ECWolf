@@ -55,7 +55,7 @@ To explicitly rerun CMake configuration without discarding compiled files, use
 - Treats health and ammunition as urgent sooner when local threats or repeated deaths raise risk. **All reachable enemy-dropped ammo and ammo-giving weapons are prioritized before exits** when the player has room to collect their ammo. Already-full ammo types are skipped so the bot does not loop on uncollectable drops; other low-risk supplies remain secondary to exits. Drops are collected by normal movement, never teleported into inventory.
 - During F12 auto-play, the renderer scales camera movement bob and weapon bob to **10% of normal** (previously 25%), reducing rapid visual shaking further. Turning, damage, collisions and manual-play visuals are unchanged.
 - On unattended death, restarts the level with ECWolf's native respawn flow (not world snapshots), remembers lethal tiles, and adopts more cautious movement after repeat deaths. The account-wide RPG profile still persists independently.
-- On movement failure, temporarily blocks the obstructed waypoint and tries alternate routes. Temporary noclip now requires at least four failed detours plus an eight-second sustained stall after those retries. An **emergency level advance** requires eight minutes of persistent failure and at least four recorded recovery failures. These logged fallbacks are not cheat-free and should never be confused with normal exit completion.
+- On movement failure, temporarily blocks the obstructed waypoint and tries alternate routes. Temporary noclip now requires at least four failed detours plus an eight-second sustained stall after those retries. An **emergency level advance** requires eight minutes of persistent failure and at least four recorded recovery failures, **and is disabled unless Emergency Cheats is explicitly enabled in the RPG menu**. These logged fallbacks are not cheat-free and should never be confused with normal exit completion.
 - Attempts to continue into the next available episode after an episode
   ending. Skips certain modal end screens in unattended mode.
 
@@ -66,7 +66,7 @@ particular, mod-specific trigger scripting, boss-dependent exits, moving
 pushwalls, timed puzzles, inventory decisions, and unusual key mechanics can
 require additional handling. Route selection is tile-based and only heuristically penalizes prior death locations; it does not model every dynamic threat or guarantee survivability. Death restarts the
 current map without consuming a finite life while the bot is enabled;
-scripted level skipping may occur as a last resort.
+scripted level skipping is available only when the separate Emergency Cheats option is enabled.
 
 The standalone C++ regression suite in `tests/test_autobot_policy.cpp` checks route costs, recovery escalation, strafing clearance decisions, firing ranges, knife attack press/release timing, enemy-drop priority, and reduced camera bob. Run it locally with:
 

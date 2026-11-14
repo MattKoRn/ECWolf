@@ -147,7 +147,7 @@ else {
 }
 
 Write-Host "=== Running fast native autoplayer + RPG regression tests ==="
-$testBuild = Join-Path $repo "build\autoplayer-policy"
+$testBuild = Join-Path $repo "build\autoplayer-policy-win64"
 Run-Checked "cmake" @("-S", (Join-Path $repo "tests"), "-B", $testBuild,
     "-G", $generator, "-A", "x64") -Stage "test-configure"
 Run-Checked "cmake" @("--build", $testBuild, "--config", "Release", "--parallel") -Stage "test-build"

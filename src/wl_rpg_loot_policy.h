@@ -32,7 +32,8 @@ namespace RPGLootPolicy {
     inline const char *AffixName(unsigned slot, unsigned affix) {
         const char *weapon[] = { "Brutal", "Keen", "Swift" };
         const char *armor[] = { "Fortified", "Restorative", "Swift" };
-        return (slot == Weapon ? weapon : armor)[std::min(2U, affix)];
+        const unsigned index = std::min(2U, affix);
+        return slot == Weapon ? weapon[index] : armor[index];
     }
     inline void WeightedRemainder(unsigned remaining, const unsigned weights[6], unsigned extras[6]) {
         unsigned total = 0;

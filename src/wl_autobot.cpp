@@ -3,8 +3,8 @@
  *
  * Operates on the same TicCmd_t input as a human player. It deliberately does
  * not spawn pickups, teleport, or invoke exit specials directly during normal
- * navigation. The last-resort completion below is opt-in through BotEnabled
- * and only considered after an extended, unrecoverable navigation failure.
+ * navigation. Emergency cheats require a separate explicit opt-in and are
+ * disabled by default even when the bot is enabled.
  */
 #include <algorithm>
 #include <cmath>
