@@ -66,7 +66,9 @@ int main()
 	assert(StrafeDirection(0, false, false) == 0);
 	assert(ShouldShoot(5.5, false));
 	assert(!ShouldShoot(7.0, false));
-	assert(ShouldShoot(1.0, true));
+	assert(ShouldShoot(0.92, true));
+	assert(!ShouldShoot(0.93, true));
+	assert(!ShouldShoot(1.0, true));
 	assert(!ShouldShoot(3.0, true));
 	// Wolf knife inherits Clip ammo, but primary attack consumes zero ammo.
 	assert(IsMeleeWeapon(true, false, 0));
@@ -80,13 +82,27 @@ int main()
 	assert(MeleeApproachSpeed(1.0) == -35);
 	assert(MeleeApproachSpeed(0.8) == -35);
 	assert(MeleeApproachSpeed(0.65) == 0);
-	assert(ShouldShoot(1.05, true));
-	assert(!ShouldShoot(1.06, true));
+	assert(ShouldShoot(0.85, true));
+	assert(!ShouldShoot(1.05, true));
 
-	// Manual camera bob is unchanged; auto-play reduces it by 75%.
+	// Knife pulses start immediately upon aim/range lock, remain down for
+	// three tics, then release until the next 15-tic cycle.
+	for(unsigned int tic = 0; tic < 45; ++tic)
+	{
+		assert(MeleeAttackInput(tic, true, true) == (tic % 15 < 3));
+		assert(!MeleeAttackInput(tic, false, true));
+		assert(!MeleeAttackInput(tic, true, false));
+	}
+	// Dropped ammo takes priority over an exit only while collectible.
+	assert(AmmoDropPriority(true, true, 6) == 1);
+	assert(AmmoDropPriority(false, true, 6) == 6);
+	assert(AmmoDropPriority(true, false, 6) == 6);
+	assert(AmmoDropPriority(true, true, 2) == 1);
+
+	// Manual camera bob is unchanged; auto-play reduces it by 90%.
 	assert(AutoPlayVisualBob(400, false) == 400);
-	assert(AutoPlayVisualBob(400, true) == 100);
-	assert(AutoPlayVisualBob(-400, true) == -100);
+	assert(AutoPlayVisualBob(400, true) == 40);
+	assert(AutoPlayVisualBob(-400, true) == -40);
 	assert(AutoPlayVisualBob(0, true) == 0);
 
 	// Quadratic thresholds strictly increase at every level up; the
