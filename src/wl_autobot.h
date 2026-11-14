@@ -14,6 +14,9 @@ void Bot_Update(TicCmd_t &cmd);
 void Bot_NewGame(const FString &startMap, int difficulty);
 bool Bot_AdvanceEpisode();
 
+// Optional file-only structured telemetry for unattended campaign tests.
+void Bot_SetLogPath(const char *path);
+
 // Recover from bot death via ECWolf's existing level respawn path.
 // No snapshot deserialization is performed during unattended gameplay.
 bool Bot_ResumeAfterDeath();
