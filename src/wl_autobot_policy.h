@@ -64,11 +64,13 @@ namespace AutobotPolicy
 	// Allow four genuine pathfinding retries before resorting to noclip.
 	// The stalled timer resets after each detour, so the last-resort delay
 	// is measured AFTER the fourth failed route.
-	inline RecoveryStep RecoveryFor(unsigned int stalledTics, unsigned int detours)
+	inline RecoveryStep RecoveryFor(unsigned int stalledTics, unsigned int detours,
+		bool allowCheats = false)
 	{
-		if(stalledTics >= 70 * 8 && detours >= 4)
+		if(allowCheats && stalledTics >= 70 * 8 && detours >= 4)
 			return EmergencyNoclip;
-		if(stalledTics >= 140 && detours < 4)
+		// When cheats are disabled, keep seeking legitimate alternate paths.
+		if(stalledTics >= 140 && (!allowCheats || detours < 4))
 			return Detour;
 		return KeepTrying;
 	}
@@ -160,6 +162,13 @@ namespace AutobotPolicy
 			(deaths >= 2 && ammo <= 18)))
 			return 1;
 		return 6;
+	}
+
+	inline int AimTolerance(double distanceTiles, unsigned int nearbyThreat)
+	{
+		if(distanceTiles > 4.5) return 3;
+		if(distanceTiles > 2.0) return 5;
+		return nearbyThreat >= 7 ? 8 : 6;
 	}
 
 	inline int WeaponScore(int slot, unsigned int ammo, bool melee,

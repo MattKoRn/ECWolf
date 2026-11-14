@@ -205,3 +205,7 @@ These are regression scenarios, not a claim of an automated full playthrough.
 The implementation intentionally keeps its own state outside savegame
 serialization. Saves include the ordinary game state, not the bot's visit
 history.
+
+## Campaign-focused navigation (next iteration)
+
+The planner now treats player-activated pushwalls as optional progression switches and can operate them from permitted sides. Aim tolerance adapts to distance and threat while retaining standard weapon selection and evasion. Cheat-free detours are the default: emergency noclip and level-skipping must be explicitly enabled via **Options → RPG Progression → Toggle Emergency Cheats** (off initially). This does **not** guarantee full campaign completion; unusual mod-specific puzzles and game-data playthroughs still require real-world testing. A compact HUD shows the current bot goal and RPG progress.

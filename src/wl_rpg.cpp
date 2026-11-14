@@ -5,6 +5,8 @@
  */
 #include "wl_rpg.h"
 #include "wl_rpg_progression.h"
+#include "wl_rpg_loot_policy.h"
+#include "wl_autobot.h"
 
 #include <algorithm>
 #include <cmath>
@@ -180,11 +182,18 @@ std::string Compact(const BigNumber &number) {
     return out + Suffix(group);
 }
 
+
+struct Equipment {
+    unsigned rarity, affix, power;
+    Equipment() : rarity(0), affix(0), power(0) {}
+};
 struct Profile {
     BigNumber level, xp, points;
+    Equipment equipment[RPGLootPolicy::SlotCount];
+    bool autoSpend, showHud;
     BigNumber stat[RPG::StatCount];
     unsigned long long savedAt;
-    Profile() : level(1), xp(0), points(0), savedAt(0) {}
+    Profile() : level(1), xp(0), points(0), autoSpend(true), showHud(true), savedAt(0) {}
 };
 Profile profile;
 bool ready = false;
@@ -264,6 +273,14 @@ bool ReadProfile() {
         else if(key == "xp") loaded.xp = BigNumber(value);
         else if(key == "points") loaded.points = BigNumber(value);
         else if(key == "savedAt") loaded.savedAt = std::strtoull(value.c_str(), NULL, 10);
+        else if(key == "autoSpend") loaded.autoSpend = value != "0";
+        else if(key == "showHud") loaded.showHud = value != "0";
+        else if(key == "weaponRarity") loaded.equipment[0].rarity = std::min(4, std::max(0, std::atoi(value.c_str())));
+        else if(key == "weaponAffix") loaded.equipment[0].affix = std::min(2, std::max(0, std::atoi(value.c_str())));
+        else if(key == "weaponPower") loaded.equipment[0].power = std::min(30, std::max(0, std::atoi(value.c_str())));
+        else if(key == "armorRarity") loaded.equipment[1].rarity = std::min(4, std::max(0, std::atoi(value.c_str())));
+        else if(key == "armorAffix") loaded.equipment[1].affix = std::min(2, std::max(0, std::atoi(value.c_str())));
+        else if(key == "armorPower") loaded.equipment[1].power = std::min(30, std::max(0, std::atoi(value.c_str())));
         else for(int s = 0; s < RPG::StatCount; ++s) {
             std::ostringstream field; field << "stat" << s;
             if(key == field.str()) loaded.stat[s] = BigNumber(value);
@@ -282,6 +299,14 @@ void SaveProfile() {
     output << "level=" << profile.level.Text() << "\n";
     output << "xp=" << profile.xp.Text() << "\n";
     output << "points=" << profile.points.Text() << "\n";
+    output << "autoSpend=" << (profile.autoSpend ? 1 : 0) << "\n";
+    output << "showHud=" << (profile.showHud ? 1 : 0) << "\n";
+    output << "weaponRarity=" << profile.equipment[0].rarity << "\n";
+    output << "weaponAffix=" << profile.equipment[0].affix << "\n";
+    output << "weaponPower=" << profile.equipment[0].power << "\n";
+    output << "armorRarity=" << profile.equipment[1].rarity << "\n";
+    output << "armorAffix=" << profile.equipment[1].affix << "\n";
+    output << "armorPower=" << profile.equipment[1].power << "\n";
     for(int i = 0; i < RPG::StatCount; ++i)
         output << "stat" << i << "=" << profile.stat[i].Text() << "\n";
     output << "savedAt=" << Now() << "\n";
@@ -301,7 +326,8 @@ double Power() {
     unsigned long long total = 0;
     for(int i = 0; i < RPG::StatCount; ++i)
         total += profile.stat[i].Capped(10000000);
-    return 1.0 + 0.10 * std::sqrt(level) + 0.04 * std::sqrt(static_cast<double>(total));
+    return std::min(3.5, 1.0 + 0.06 * std::sqrt(std::max(0.0, level - 1.0)) +
+        0.025 * std::sqrt(static_cast<double>(total)));
 }
 unsigned int RandomPercent(unsigned int min, unsigned int max) {
     return min + static_cast<unsigned int>(pr_rpg()) % (max - min + 1);
@@ -364,6 +390,7 @@ void Tick() {
     lastGameTick = gamestate.TimeCount;
     if(gamestate.TimeCount % TICRATE) return;
     FinishLevels(2500);
+    if(profile.autoSpend && !profile.points.IsZero()) SmartAutoAssign();
     APlayerPawn *pawn = players[ConsolePlayer].mo;
     if(pawn && players[ConsolePlayer].state == player_t::PST_LIVE) {
         const APlayerPawn *base = static_cast<const APlayerPawn *>(pawn->GetDefault());
@@ -376,9 +403,11 @@ void Tick() {
             players[ConsolePlayer].health = newMax;
         if(players[ConsolePlayer].health > 0) {
             const unsigned int regen = NumericStat(Recovery);
-            if(regen) {
+            const Equipment &armor = profile.equipment[RPGLootPolicy::Armor];
+            if(regen || (armor.rarity && armor.affix == RPGLootPolicy::Keen)) {
                 int amount = std::max(1, static_cast<int>(std::min(
-                    static_cast<double>(newMax) / 8.0, 1.0 + regen * 0.75)));
+                    static_cast<double>(newMax) / 8.0, 1.0 + regen * 0.75 +
+                    (armor.rarity && armor.affix == RPGLootPolicy::Keen ? armor.power * 0.2 : 0.0))));
                 players[ConsolePlayer].health = std::min(newMax,
                     players[ConsolePlayer].health + amount);
             }
@@ -416,7 +445,14 @@ void ShowProfile() {
         << "  Recovery " << Compact(profile.stat[Recovery]) << "\n"
         << "Fortune " << Compact(profile.stat[Fortune])
         << "  Agility " << Compact(profile.stat[Agility]) << "\n"
-        << "Auto Assign spends all points.\n"
+        << "Smart auto-spend: " << (profile.autoSpend ? "ON" : "OFF") << "\n"
+        << "RPG HUD: " << (profile.showHud ? "ON" : "OFF") << "\n"
+        << "Weapon: " << (profile.equipment[0].rarity ? "equipped" : "none")
+        << " tier " << profile.equipment[0].rarity << " affix "
+        << profile.equipment[0].affix << " power " << profile.equipment[0].power << "\n"
+        << "Armor: " << (profile.equipment[1].rarity ? "equipped" : "none")
+        << " tier " << profile.equipment[1].rarity << " affix "
+        << profile.equipment[1].affix << " power " << profile.equipment[1].power << "\n"
         << "Saved to Documents/ECWolfRPG";
     Message(msg.str().c_str());
     IN_Ack(ACK_Local);
@@ -440,10 +476,54 @@ void AutoAssign() {
     SaveProfile();
 }
 
+void SmartAutoAssign() {
+    if(!ready || profile.points.IsZero() || Net::InitVars.mode != Net::MODE_SinglePlayer) return;
+    unsigned health = 100;
+    APlayerPawn *pawn = players[ConsolePlayer].mo;
+    if(pawn && pawn->maxhealth > 0)
+        health = static_cast<unsigned>(std::max(0.0, std::min(100.0,
+            100.0 * pawn->health / pawn->maxhealth)));
+    unsigned weights[StatCount];
+    RPGLootPolicy::CombatWeights(health, BotEnabled, weights);
+    unsigned total = 0;
+    for(int i = 0; i < StatCount; ++i) total += weights[i];
+    BigNumber share = profile.points;
+    unsigned remainder = share.DivideSmall(total);
+    for(int i = 0; i < StatCount; ++i) {
+        BigNumber portion = share;
+        portion.MultiplySmall(weights[i]);
+        profile.stat[i].Add(portion);
+        const unsigned extra = std::min(weights[i], remainder);
+        profile.stat[i].Add(BigNumber(extra));
+        remainder -= extra;
+    }
+    profile.points = BigNumber(0);
+    SaveProfile();
+}
+bool AutoSpendEnabled() { return profile.autoSpend; }
+void ToggleAutoSpend() {
+    profile.autoSpend = !profile.autoSpend;
+    if(profile.autoSpend) SmartAutoAssign();
+    SaveProfile();
+}
+bool HudEnabled() { return ready && profile.showHud; }
+void ToggleHud() { profile.showHud = !profile.showHud; SaveProfile(); }
+const char *HudLine() {
+    static std::string line;
+    if(!ready) return "";
+    std::ostringstream msg;
+    msg << "RPG Lv" << Compact(profile.level) << " XP" << Compact(profile.xp)
+        << " P" << Compact(profile.points);
+    if(profile.equipment[0].rarity)
+        msg << " | Weapon T" << profile.equipment[0].rarity
+            << "+" << profile.equipment[0].power;
+    line = msg.str();
+    return line.c_str();
+}
 void OnEnemySpawn(AActor *actor) {
     if(!ready || !actor || actor->player || !(actor->flags & FL_COUNTKILL)
         || actor->health <= 0 || Net::InitVars.mode != Net::MODE_SinglePlayer) return;
-    const double factor = Power() * RandomPercent(80, 125) / 100.0;
+    const double factor = Power() * RandomPercent(92, 110) / 100.0;
     actor->health = static_cast<int>(std::min(100000000.0, actor->health * factor));
     // Small, strictly capped speed variance; navigation cannot outrun collision.
     actor->speed = static_cast<int>(std::min(10000000.0,
@@ -458,15 +538,35 @@ void OnEnemyDeath(AActor *actor) {
     gained.DivideSmall(4);
     gained.Add(BigNumber(1));
     gained.MultiplySmall(base);
-    gained.MultiplySmall(RandomPercent(80, 140));
+    gained.MultiplySmall(RandomPercent(90, 125));
     gained.DivideSmall(100);
     GrantXP(gained);
+    // Physical engine weapons remain untouched: rolls award persistent
+    // automatically equipped RPG weapon/armor relics with gameplay affixes.
+    const unsigned rarity = RPGLootPolicy::RollRarity(
+        RandomPercent(0, 9999), NumericStat(Fortune, 100));
+    if(!rarity) return;
+    const unsigned slot = RandomPercent(0, 1);
+    const unsigned affix = RandomPercent(0, 2);
+    const unsigned level = static_cast<unsigned>(profile.level.Capped(1000));
+    const unsigned power = RPGLootPolicy::Power(rarity, level);
+    Equipment &current = profile.equipment[slot];
+    if(!RPGLootPolicy::Better(current.rarity, current.power, rarity, power)) return;
+    current.rarity = rarity;
+    current.power = power;
+    current.affix = affix;
+    Printf("RPG: found and equipped tier %u %s relic (affix %u, power %u).\n",
+        rarity, slot == 0 ? "weapon" : "armor", affix, power);
+    SaveProfile();
 }
 unsigned OutgoingDamage(unsigned damage, const AActor *attacker) {
     if(!ready || !attacker || !attacker->player || Net::InitVars.mode != Net::MODE_SinglePlayer)
         return damage;
-    const double attack = 1.0 + NumericStat(Damage) * 0.075;
-    const double crit = std::min(80.0, 5.0 + NumericStat(Fortune) * 0.25);
+    const Equipment &weapon = profile.equipment[RPGLootPolicy::Weapon];
+    const double attack = 1.0 + NumericStat(Damage) * 0.075 +
+        (weapon.rarity && weapon.affix == RPGLootPolicy::Brutal ? weapon.power * 0.01 : 0.0);
+    const double crit = std::min(80.0, 5.0 + NumericStat(Fortune) * 0.25 +
+        (weapon.rarity && weapon.affix == RPGLootPolicy::Keen ? weapon.power * 0.5 : 0.0));
     const double multiplier = RandomPercent(0, 99) < crit ? 1.75 : 1.0;
     return BoundDamage(static_cast<double>(damage) * attack * multiplier);
 }
@@ -475,14 +575,20 @@ int IncomingDamage(int damage, const AActor *attacker) {
     double amount = damage;
     if(attacker && !attacker->player)
         amount *= Power() * RandomPercent(85, 115) / 100.0;
-    const double armor = 1.0 + NumericStat(Defense) * 0.06;
+    const Equipment &relic = profile.equipment[RPGLootPolicy::Armor];
+    const double armor = 1.0 + NumericStat(Defense) * 0.06 +
+        (relic.rarity && relic.affix == RPGLootPolicy::Brutal ? relic.power * 0.01 : 0.0);
     amount /= armor;
     if(amount < 1.0) amount = 1.0; // No invulnerability from unlimited stats.
     return static_cast<int>(BoundDamage(amount));
 }
 int MovementSpeed(int baseSpeed) {
     if(!ready || Net::InitVars.mode != Net::MODE_SinglePlayer) return baseSpeed;
-    const double factor = std::min(1.50, 1.0 + NumericStat(Agility) * 0.02);
+    const Equipment &weapon = profile.equipment[RPGLootPolicy::Weapon];
+    const Equipment &armor = profile.equipment[RPGLootPolicy::Armor];
+    const double boost = (weapon.rarity && weapon.affix == RPGLootPolicy::Swift ? weapon.power * 0.002 : 0.0) +
+        (armor.rarity && armor.affix == RPGLootPolicy::Swift ? armor.power * 0.002 : 0.0);
+    const double factor = std::min(1.50, 1.0 + NumericStat(Agility) * 0.02 + boost);
     return static_cast<int>(std::min(10000000.0, baseSpeed * factor));
 }
 }

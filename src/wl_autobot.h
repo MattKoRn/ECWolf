@@ -6,6 +6,9 @@ struct TicCmd_t;
 
 // Shared by the Controls menu and the F12 hotkey. Off by default.
 extern bool BotEnabled;
+// False by default: normal unattended play never enables noclip or skips maps.
+extern bool BotAllowEmergencyCheats;
+const char *Bot_StatusLine();
 
 // Called once after normal input polling; never simulates OS key presses.
 void Bot_Update(TicCmd_t &cmd);

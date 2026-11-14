@@ -146,6 +146,13 @@ else {
     Write-Host "=== Reusing existing CMake configuration ==="
 }
 
+Write-Host "=== Running fast native autoplayer + RPG regression tests ==="
+$testBuild = Join-Path $repo "build\autoplayer-policy"
+Run-Checked "cmake" @("-S", (Join-Path $repo "tests"), "-B", $testBuild,
+    "-G", $generator, "-A", "x64") -Stage "test-configure"
+Run-Checked "cmake" @("--build", $testBuild, "--config", "Release", "--parallel") -Stage "test-build"
+Run-Checked "ctest" @("--test-dir", $testBuild, "-C", "Release", "--output-on-failure") -Stage "test-run"
+
 Write-Host "=== Incremental compilation (only changed sources and dependencies) ==="
 # No --clean-first: the build tool recompiles changed sources and affected dependencies.
 Run-Checked "cmake" @("--build", $build, "--config", "Release", "--parallel") -Stage "build"

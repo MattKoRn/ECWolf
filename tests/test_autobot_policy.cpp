@@ -1,5 +1,6 @@
 #include "../src/wl_autobot_policy.h"
 #include "../src/wl_rpg_progression.h"
+#include "../src/wl_rpg_loot_policy.h"
 // CI builds in Release; keep assertion-based regressions active under NDEBUG.
 #ifdef NDEBUG
 #undef NDEBUG
@@ -48,10 +49,12 @@ int main()
 	assert(distance[5] == INT_MAX);
 	assert(RecoveryFor(139, 0) == KeepTrying);
 	assert(RecoveryFor(140, 0) == Detour);
-	assert(RecoveryFor(279, 3) == KeepTrying);
+	assert(RecoveryFor(279, 3) == Detour);
 	assert(RecoveryFor(280, 3) == Detour);
-	assert(RecoveryFor(559, 4) == KeepTrying);
-	assert(RecoveryFor(560, 4) == EmergencyNoclip);
+	assert(RecoveryFor(559, 4) == Detour);
+	assert(RecoveryFor(560, 4) == Detour);
+	assert(RecoveryFor(559, 4, true) == KeepTrying);
+	assert(RecoveryFor(560, 4, true) == EmergencyNoclip);
 	assert(!ShouldEmergencyAdvance(70 * 479, 10));
 	assert(!ShouldEmergencyAdvance(70 * 480, 3));
 	assert(ShouldEmergencyAdvance(70 * 480, 4));
@@ -156,6 +159,10 @@ int main()
 	assert(RangedMovementSpeed(3.5, true, 6) == 20);
 	assert(RangedMovementSpeed(3.5, false, 6) == 0);
 	assert(RangedMovementSpeed(6.0, false, 0) == -42);
+	assert(AimTolerance(6.0, 3) == 3);
+	assert(AimTolerance(3.0, 3) == 5);
+	assert(AimTolerance(1.0, 10) == 8);
+	assert(AimTolerance(1.0, 1) == 6);
 	assert(WeaponScore(4, 40, false, 3.0, 1) >
 		WeaponScore(1, 40, false, 3.0, 1));
 	assert(WeaponScore(4, 2, false, 3.0, 1) <
@@ -167,4 +174,19 @@ int main()
 	assert(ThreatDodgeDirection(0, true, true, 4, 1) == -1);
 	assert(ThreatDodgeDirection(0, false, true, 1, 4) == -1);
 	assert(ThreatDodgeDirection(0, false, false, 1, 4) == 0);
+	assert(RPGLootPolicy::RollRarity(9999, 0) == RPGLootPolicy::None);
+	assert(RPGLootPolicy::RollRarity(0, 0) == RPGLootPolicy::Legendary);
+	assert(RPGLootPolicy::RollRarity(20, 0) == RPGLootPolicy::Epic);
+	assert(RPGLootPolicy::RollRarity(100, 0) == RPGLootPolicy::Rare);
+	assert(RPGLootPolicy::RollRarity(500, 0) == RPGLootPolicy::Common);
+	assert(RPGLootPolicy::RollRarity(980, 100) == RPGLootPolicy::Common);
+	assert(RPGLootPolicy::Power(0, 100) == 0);
+	assert(RPGLootPolicy::Power(4, 1000) == 30);
+	assert(RPGLootPolicy::Better(1, 4, 2, 5));
+	assert(!RPGLootPolicy::Better(3, 10, 2, 30));
+	unsigned weights[6] = {};
+	RPGLootPolicy::CombatWeights(30, true, weights);
+	assert(weights[1] > weights[4] && weights[2] > weights[0]);
+	RPGLootPolicy::CombatWeights(100, false, weights);
+	assert(weights[0] > weights[4]);
 }

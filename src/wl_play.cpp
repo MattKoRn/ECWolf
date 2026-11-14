@@ -26,6 +26,7 @@
 #include "wl_play.h"
 #include "wl_autobot.h"
 #include "wl_rpg.h"
+#include "wl_rpg.h"
 #include "g_mapinfo.h"
 #include "a_inventory.h"
 #include "am_map.h"
@@ -1024,6 +1025,24 @@ void PlayFrame()
 		ResetTimeCount();
 	}
 
+	// Two compact game-space HUD lines, independent of savegame serialization.
+	if(RPG::HudEnabled() && Net::InitVars.mode == Net::MODE_SinglePlayer)
+	{
+		const char *lines[2] = { Bot_StatusLine(), RPG::HudLine() };
+		for(int i = 0; i < 2; ++i)
+		{
+			word x = 0, y = static_cast<word>(fpscounter ? 12 + i * 12 : i * 12);
+			word width = 0, height = 0;
+			VW_MeasurePropString(ConFont, lines[i], width, height);
+			MenuToRealCoords(x, y, width, height, MENU_TOP);
+			VWB_Clear(GPalette.BlackIndex, x, y, x + width + 1, y + height + 1);
+			px = 0;
+			py = static_cast<word>(fpscounter ? 12 + i * 12 : i * 12);
+			pa = MENU_TOP;
+			VWB_DrawPropString(ConFont, lines[i], CR_WHITE);
+		}
+		pa = MENU_CENTER;
+	}
 	VH_UpdateScreen();
 }
 

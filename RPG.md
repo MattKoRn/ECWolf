@@ -85,3 +85,9 @@ is not included; use the script's `-GameDataPath` option if needed.
 
 Existing ECWolf save files remain separate and are not modified by the RPG
 profile writer.
+
+## Combat allocation, relic loot and HUD
+
+**Smart Auto Spend** is on by default for new and existing profiles; it allocates earned points proportionally to damage, health, defense, recovery, fortune, and agility, with extra survival investment when injured and extra mobility/defense under autopilot. Turn it off under **Options → RPG Progression** for manual allocation. Ordinary **Auto Assign All Points** remains available.
+
+Monsters can award an auto-collected RPG *relic* (common, rare, epic or legendary) in the weapon or armor slot. These are persistent **stat-affix equipment rewards**, not dropped map actors or new rendered weapon sprites. Better-tier relics automatically replace lower-tier relics. Affix index 0 increases weapon damage or armor mitigation, index 1 boosts critical chance or regeneration, and index 2 increases movement speed; the 1.5x movement safety cap still applies. The profile stores rarity, affix and power in backward-compatible optional fields. **Toggle RPG/Autoplayer HUD** shows two compact lines for the bot objective and progression. The new **BUILD-AND-INSTALL-ECWOLF.bat** builds and tests both systems, installs to a separate directory and creates one desktop shortcut.

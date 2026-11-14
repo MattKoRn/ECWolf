@@ -33,6 +33,7 @@
 #include "lnspec.h"
 
 bool BotEnabled = false;
+bool BotAllowEmergencyCheats = false;
 
 namespace
 {
@@ -132,6 +133,12 @@ namespace
 	{
 		return action == Specials::Door_Open ||
 			action == Specials::Door_Elevator;
+	}
+
+	bool PushwallSpecial(unsigned int action)
+	{
+		return action == Specials::Pushwall_Move ||
+			action == Specials::Pushwall_MoveNoStop;
 	}
 
 	bool InteractiveSpecial(unsigned int action)
@@ -390,7 +397,8 @@ namespace
 					!P_CheckKeys(pawn, trigger.arg[3], true))
 					missingKey = true;
 				if(trigger.playerUse && !ExitSpecial(trigger.action) &&
-					!InteractiveSpecial(trigger.action) && !memory.usedSwitch[cell])
+					(!InteractiveSpecial(trigger.action) || PushwallSpecial(trigger.action)) &&
+					!memory.usedSwitch[cell])
 					pendingSwitch = true;
 			}
 		}
@@ -483,7 +491,8 @@ namespace
 					continue;
 				const bool exit = ExitSpecial(trigger.action);
 				if(!exit && (!trigger.playerUse ||
-					memory.usedSwitch[tile] || InteractiveSpecial(trigger.action)))
+					memory.usedSwitch[tile] ||
+					(InteractiveSpecial(trigger.action) && !PushwallSpecial(trigger.action))))
 					continue;
 
 				if(exit && memory.exitRetryAfter[tile] > memory.ticks)
@@ -554,7 +563,7 @@ namespace
 			}
 			// Once all reachable alternatives and blocked-door retries fail,
 			// avoid an infinite idle loop even when no checkpoint was loaded.
-			if(AutobotPolicy::ShouldEmergencyAdvance(
+			if(BotAllowEmergencyCheats && AutobotPolicy::ShouldEmergencyAdvance(
 				memory.noGoalTicks, failures.noGoals))
 			{
 				Printf("Autoplayer: emergency level advance (%s).\n",
@@ -608,7 +617,8 @@ namespace
 				const MapTrigger &trig = useSpot->triggers[t];
 				if(!trig.playerUse || (!trig.active && !trig.repeatable) ||
 					(!ExitSpecial(trig.action) &&
-						(memory.usedSwitch[best.use] || InteractiveSpecial(trig.action))))
+						(memory.usedSwitch[best.use] ||
+						 (InteractiveSpecial(trig.action) && !PushwallSpecial(trig.action)))))
 					continue;
 				canUse = true;
 				if(ExitSpecial(trig.action)) isExit = true;
@@ -786,7 +796,9 @@ namespace
 		hasTarget = true;
 		memory.waypoint = -1;
 		const double distanceTiles = std::sqrt(nearest) / TILEGLOBAL;
-		const bool aimed = TurnToward(pawn, cmd, target->x, target->y, 6);
+		const unsigned int danger = memory.threat[Index(pawn->tilex, pawn->tiley)];
+		const bool aimed = TurnToward(pawn, cmd, target->x, target->y,
+			AutobotPolicy::AimTolerance(distanceTiles, danger));
 		if(memory.ticks % (70 * 5) == 0)
 			LogEvent("combat", "visible_hostile", target->tilex, target->tiley);
 		if(SelectCombatWeapon(pawn, cmd, distanceTiles))
@@ -926,7 +938,8 @@ namespace
 		if(!memory.usedEmergencyNoclip)
 		{
 			const AutobotPolicy::RecoveryStep step =
-				AutobotPolicy::RecoveryFor(memory.stuck, memory.detours);
+				AutobotPolicy::RecoveryFor(memory.stuck, memory.detours,
+					BotAllowEmergencyCheats);
 			if(step == AutobotPolicy::Detour && memory.waypoint >= 0)
 			{
 				const unsigned int backoff = 8U +
@@ -956,7 +969,7 @@ namespace
 			}
 		}
 
-		if(AutobotPolicy::ShouldEmergencyAdvance(
+		if(BotAllowEmergencyCheats && AutobotPolicy::ShouldEmergencyAdvance(
 			memory.failedRecoveryTicks, memory.detours))
 		{
 			Printf("Autoplayer: emergency advance after prolonged route failures.\n");
@@ -967,6 +980,21 @@ namespace
 
 }
 
+
+const char *Bot_StatusLine()
+{
+	static char status[96];
+	const char *goal = memory.lastGoalPriority == 0 ? "key" :
+		memory.lastGoalPriority == 1 ? "supplies" :
+		memory.lastGoalPriority == 2 ? "exit" :
+		memory.lastGoalPriority == 3 ? "switch / secret" :
+		memory.lastGoalPriority == 4 ? "enemy" :
+		memory.lastGoalPriority == 5 ? "exit prerequisite" :
+		memory.lastGoalPriority == 6 ? "supply" : "explore";
+	std::snprintf(status, sizeof(status), "AUTO %s | %s | %s",
+		BotEnabled ? "ON" : "OFF", memory.mapName[0] ? memory.mapName : "menu", goal);
+	return status;
+}
 
 // Can be enabled only via the optional command-line harness or by setting
 // an explicit log path. Routine F12 use does not create files.

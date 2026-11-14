@@ -66,6 +66,24 @@ MENU_LISTENER(RPGAutoSpend)
 	RPG::ShowProfile();
 	return true;
 }
+MENU_LISTENER(RPGSmartSpend)
+{
+	RPG::ToggleAutoSpend();
+	RPG::ShowProfile();
+	return true;
+}
+MENU_LISTENER(RPGHudToggle)
+{
+	RPG::ToggleHud();
+	return true;
+}
+MENU_LISTENER(BotCheatToggle)
+{
+	BotAllowEmergencyCheats = !BotAllowEmergencyCheats;
+	Message(BotAllowEmergencyCheats ? "Emergency cheats ON" : "Emergency cheats OFF");
+	IN_Ack(ACK_Local);
+	return true;
+}
 MENU_LISTENER(RPGSpendPoint)
 {
 	RPG::AddStat(static_cast<RPG::Stat>(which - 2));
@@ -472,6 +490,9 @@ void CreateMenus()
 	rpgMenu.setHeadText("ECWolf RPG - Permanent Progress");
 	rpgMenu.addItem(new MenuItem("View RPG Profile", RPGShowStats));
 	rpgMenu.addItem(new MenuItem("Auto Assign All Points", RPGAutoSpend));
+	rpgMenu.addItem(new MenuItem("Toggle Smart Auto Spend", RPGSmartSpend));
+	rpgMenu.addItem(new MenuItem("Toggle RPG/Autoplayer HUD", RPGHudToggle));
+	rpgMenu.addItem(new MenuItem("Toggle Emergency Cheats (Default OFF)", BotCheatToggle));
 	rpgMenu.addItem(new MenuItem("Damage +1", RPGSpendPoint));
 	rpgMenu.addItem(new MenuItem("Vitality +1", RPGSpendPoint));
 	rpgMenu.addItem(new MenuItem("Defense +1", RPGSpendPoint));

@@ -13,6 +13,12 @@ namespace RPG {
     void ShowProfile();
     void AddStat(Stat stat);
     void AutoAssign();
+    void SmartAutoAssign();
+    bool AutoSpendEnabled();
+    void ToggleAutoSpend();
+    bool HudEnabled();
+    void ToggleHud();
+    const char *HudLine();
     void OnEnemySpawn(AActor *actor);
     void OnEnemyDeath(AActor *actor);
     unsigned OutgoingDamage(unsigned damage, const AActor *attacker);
