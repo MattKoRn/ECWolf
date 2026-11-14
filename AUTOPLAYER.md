@@ -47,19 +47,13 @@ To explicitly rerun CMake configuration without discarding compiled files, use
 
 ## How it works
 
-- Uses the real map geometry for breadth-first routing.
-- Targets keys, essential pickups, reachable exit and teleporter triggers,
-  and scripted switches; visits unexplored reachable floor tiles if needed.
+- Replans a weighted route against live geometry each tick. Closed doors cost more to traverse; temporary obstructions cause detours and previously lethal tiles carry a route penalty.
+- Prioritizes keys, urgent health/ammo, exits, switches, and reachable monsters; unsuccessful exit attempts are cooled down so boss-gated objectives can be pursued.
 - Operates normal player movement, Use, and Attack inputs rather than
   teleporting in normal play.
-- Attempts to fight currently visible monsters before pursuing navigation.
-- On unattended death, restarts the current level using ECWolf's native respawn
-  flow instead of reloading a world snapshot. The account-wide RPG profile
-  still saves automatically and persists between sessions.
-- After repeated failed recovery, allows temporary noclip and ultimately
-  an **emergency level advance**. These bypass rules **only** after the
-  bot has failed to navigate normally. Do not enable autopilot if you want
-  a strictly cheat-free game.
+- Fights visible monsters with strafing and backsteps where geometry permits, approaching distant targets instead of wasting ammunition at excessive range.
+- On unattended death, restarts the level with ECWolf's native respawn flow (not world snapshots), remembers lethal tiles, and adopts more cautious movement after repeat deaths. The account-wide RPG profile still persists independently.
+- On movement failure, temporarily blocks the obstructed waypoint and tries alternate routes. Repeated failed detours can trigger logged temporary noclip and, after prolonged failure, an **emergency level advance**. These fallbacks are not cheat-free.
 - Attempts to continue into the next available episode after an episode
   ending. Skips certain modal end screens in unattended mode.
 
@@ -68,16 +62,19 @@ To explicitly rerun CMake configuration without discarding compiled files, use
 **Experimental implementation — full game completion is not verified.** In
 particular, mod-specific trigger scripting, boss-dependent exits, moving
 pushwalls, timed puzzles, inventory decisions, and unusual key mechanics can
-require additional handling. Route selection is tile-based and does not
-yet model dynamic threats or guaranteed survivability. Death restarts the
+require additional handling. Route selection is tile-based and only heuristically penalizes prior death locations; it does not model every dynamic threat or guarantee survivability. Death restarts the
 current map without consuming a finite life while the bot is enabled;
 scripted level skipping may occur as a last resort.
 
-Automated compiler checks are defined in
-`.github/workflows/autoplayer-windows.yml` and
-`.github/workflows/autoplayer-linux-smoke.yml`, but a successful Windows
-build and full-game automated playthrough **must be verified** before
-treating this as production-ready. Inspect the GitHub Actions runs for
+The standalone C++ regression suite in `tests/test_autobot_policy.cpp` checks route costs, recovery escalation, strafing clearance decisions, and firing ranges. Run it locally with:
+
+```text
+cmake -S tests -B build/autoplayer-policy
+cmake --build build/autoplayer-policy
+ctest --test-dir build/autoplayer-policy --output-on-failure
+```
+
+Both `.github/workflows/autoplayer-windows.yml` and `.github/workflows/autoplayer-linux-smoke.yml` run it before compiling the engine. A successful Windows build and complete unattended gameplay **must still be verified** before treating this as production-ready. Inspect the GitHub Actions runs for
 build diagnostics. A Windows machine with the toolchain and licensed game
 data is required to validate gameplay.
 
