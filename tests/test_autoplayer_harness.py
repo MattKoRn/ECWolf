@@ -54,6 +54,17 @@ with log.open('w', encoding='utf-8') as stream:
 """
 
 
+FAKE_SKIP_ENGINE = """import pathlib
+import sys
+args = sys.argv
+log = pathlib.Path(args[args.index('--autoplay-log') + 1])
+log.write_text('event=map_start map=MAP01 tic=1\\n'
+               'event=emergency_advance map=MAP02 tic=2\\n'
+               'event=campaign_complete map=MAP10 tic=70\\n',
+               encoding='utf-8')
+"""
+
+
 class HarnessTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
@@ -130,6 +141,18 @@ class HarnessTests(unittest.TestCase):
             self.assertEqual((profile / "isolated.txt").read_text(), ext)
         self.assertNotEqual(report["results"][0]["rpg_profile_directory"],
                             report["results"][1]["rpg_profile_directory"])
+
+    def test_emergency_level_skip_is_not_verified_completion(self):
+        stub = self.root / "skip.py"
+        stub.write_text(FAKE_SKIP_ENGINE, encoding="utf-8")
+        report_dir = self.root / "skips-report"
+        code = HARNESS.main(["--engine", str(stub), "--campaign", "wolf3d",
+                             "--wolf-data", str(self.wolf),
+                             "--out-dir", str(report_dir), "--minutes", "0.1"])
+        self.assertEqual(code, 2)
+        report = json.loads((report_dir / "summary.json").read_text())
+        self.assertEqual(report["results"][0]["status"],
+                         "completed_with_skipped_maps")
 
     def test_writes_summary_for_both_campaigns(self):
         report_dir = self.root / "summary"
