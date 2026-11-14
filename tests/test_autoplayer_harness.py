@@ -32,7 +32,8 @@ with log.open('w', encoding='utf-8') as stream:
 
 # Each fake campaign waits for the other campaign's start marker. A
 # sequential runner will not be able to complete both successfully.
-FAKE_PARALLEL_ENGINE = """import pathlib
+FAKE_PARALLEL_ENGINE = """import os
+import pathlib
 import sys
 import time
 args = sys.argv
@@ -40,6 +41,8 @@ ext = args[args.index('--data') + 1]
 cwd = pathlib.Path.cwd()
 other = cwd.parent / ('Spear' if ext == 'WL6' else 'Wolf') / '.started'
 (cwd / '.started').write_text('ready', encoding='utf-8')
+pathlib.Path(os.environ['ECWOLF_RPG_PROFILE_DIR'], 'isolated.txt').write_text(
+    ext, encoding='utf-8')
 deadline = time.monotonic() + 1.5
 while not other.exists() and time.monotonic() < deadline:
     time.sleep(0.01)
@@ -122,6 +125,11 @@ class HarnessTests(unittest.TestCase):
                             for entry in report["results"]))
         self.assertTrue((report_dir / "wolf3d-events.log").is_file())
         self.assertTrue((report_dir / "spear-events.log").is_file())
+        for campaign, ext in (("wolf3d", "WL6"), ("spear", "SOD")):
+            profile = report_dir / (campaign + "-rpg-profile")
+            self.assertEqual((profile / "isolated.txt").read_text(), ext)
+        self.assertNotEqual(report["results"][0]["rpg_profile_directory"],
+                            report["results"][1]["rpg_profile_directory"])
 
     def test_writes_summary_for_both_campaigns(self):
         report_dir = self.root / "summary"
