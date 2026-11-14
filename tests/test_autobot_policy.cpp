@@ -63,6 +63,12 @@ int main()
 	assert(!ShouldShoot(7.0, false));
 	assert(ShouldShoot(1.0, true));
 	assert(!ShouldShoot(3.0, true));
+	// Wolf knife inherits Clip ammo, but primary attack consumes zero ammo.
+	assert(IsMeleeWeapon(true, false, 0));
+	assert(IsMeleeWeapon(false, false, 0));
+	assert(!IsMeleeWeapon(true, false, 1));
+	assert(!IsMeleeWeapon(true, true, 1));
+
 	// The knife must approach a target and NEVER retreat at striking range.
 	assert(MeleeApproachSpeed(5.0) == -68);
 	assert(MeleeApproachSpeed(1.1) == -68);
