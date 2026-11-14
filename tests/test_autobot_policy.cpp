@@ -70,6 +70,12 @@ int main()
 	assert(ShouldShoot(1.05, true));
 	assert(!ShouldShoot(1.06, true));
 	assert(!ShouldShoot(3.0, true));
+	// Zero-damage knife rolls are fixed for bot attacks only; ordinary
+	// player attacks and every nonzero result remain unchanged.
+	assert(AutoPlayKnifeDamage(0, true) == 1);
+	assert(AutoPlayKnifeDamage(0, false) == 0);
+	assert(AutoPlayKnifeDamage(1, true) == 1);
+	assert(AutoPlayKnifeDamage(15, true) == 15);
 	// Wolf knife inherits Clip ammo, but primary attack consumes zero ammo.
 	assert(IsMeleeWeapon(true, false, 0));
 	assert(IsMeleeWeapon(false, false, 0));
