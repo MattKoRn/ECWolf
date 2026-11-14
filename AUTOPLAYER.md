@@ -51,7 +51,8 @@ To explicitly rerun CMake configuration without discarding compiled files, use
 - Prioritizes keys, urgent health/ammo, exits, switches, and reachable monsters; unsuccessful exit attempts are cooled down so boss-gated objectives can be pursued.
 - Operates normal player movement, Use, and Attack inputs rather than
   teleporting in normal play.
-- Fights visible monsters with strafing and backsteps where geometry permits, approaching distant targets instead of wasting ammunition at excessive range.
+- Fights visible monsters with strafing and backsteps where geometry permits, approaching distant targets instead of wasting ammunition at excessive range. With a melee weapon, the bot instead pushes into striking range, attacks while closing the last gap and does not retreat just because the opponent is nearby.
+- During F12 auto-play, the renderer scales camera movement bob and weapon bob to 25% of normal, reducing rapid visual shaking. Turning, damage, collisions and manual-play visuals are unchanged.
 - On unattended death, restarts the level with ECWolf's native respawn flow (not world snapshots), remembers lethal tiles, and adopts more cautious movement after repeat deaths. The account-wide RPG profile still persists independently.
 - On movement failure, temporarily blocks the obstructed waypoint and tries alternate routes. Repeated failed detours can trigger logged temporary noclip and, after prolonged failure, an **emergency level advance**. These fallbacks are not cheat-free.
 - Attempts to continue into the next available episode after an episode
