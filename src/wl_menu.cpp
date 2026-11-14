@@ -27,6 +27,7 @@
 #include "wl_game.h"
 #include "wl_net.h"
 #include "wl_play.h"
+#include "wl_autobot.h"
 #include "wl_text.h"
 #include "v_palette.h"
 #include "colormatcher.h"
@@ -491,6 +492,7 @@ void CreateMenus()
 
 	controlBase.setHeadPicture("M_CONTRL");
 	controlBase.addItem(new BooleanMenuItem(language["STR_ALWAYSRUN"], alwaysrun, EnterControlBase));
+	controlBase.addItem(new BooleanMenuItem("Autoplayer (F12)", BotEnabled));
 	controlBase.addItem(new BooleanMenuItem(language["STR_MOUSEEN"], mouseenabled, EnterControlBase));
 	controlBase.addItem(new BooleanMenuItem(language["STR_WINDOWEDMOUSE"], forcegrabmouse, EnterControlBase));
 	controlBase.addItem(new BooleanMenuItem(language["STR_DISABLEYAXIS"], mouseyaxisdisabled, EnterControlBase));
