@@ -410,19 +410,25 @@ namespace
 			const bool healing = cls->IsDescendantOf(NATIVE_CLASS(Health));
 			const bool ammunition = cls->IsDescendantOf(NATIVE_CLASS(Ammo)) ||
 				cls->IsDescendantOf(NATIVE_CLASS(Weapon));
-			const bool lowAmmo = pawn->player->ReadyWeapon &&
-				pawn->player->ReadyWeapon->ammo[0] &&
-				pawn->player->ReadyWeapon->ammo[0]->amount < 8;
+			const AWeapon *ready = pawn->player->ReadyWeapon;
+			const unsigned int ammo = ready && ready->ammo[0] ?
+				static_cast<unsigned int>(ready->ammo[0]->amount) : 0;
+			const unsigned int localThreat =
+				memory.threat[start];
+			const int urgency = AutobotPolicy::SupplyPriority(healing,
+				ammunition, pawn->health, pawn->maxhealth, ammo,
+				localThreat, failures.deaths);
 			const int priority = key ?
 				AutobotPolicy::ObjectivePriority(AutobotPolicy::KeyObjective,
 					0, missingKey, pendingSwitch, memory.liveEnemies != 0) :
-				((healing && pawn->health < 65) || (ammunition && lowAmmo)) ?
+				urgency == 1 ?
 				AutobotPolicy::ObjectivePriority(AutobotPolicy::UrgentObjective,
 					0, missingKey, pendingSwitch, memory.liveEnemies != 0) :
 				AutobotPolicy::ObjectivePriority(AutobotPolicy::SupplyObjective,
 					0, missingKey, pendingSwitch, memory.liveEnemies != 0);
 			if(key || (healing && pawn->health < pawn->maxhealth) ||
-				(ammunition && distance[tile] != INT_MAX && distance[tile] <= 70))
+				(ammunition && (priority == 1 || (distance[tile] != INT_MAX &&
+					distance[tile] <= 180))))
 				Consider(best, distance, tile, -1, priority);
 		}
 
@@ -509,7 +515,8 @@ namespace
 			}
 			// Once all reachable alternatives and blocked-door retries fail,
 			// avoid an infinite idle loop even when no checkpoint was loaded.
-			if(memory.noGoalTicks > 70 * 180)
+			if(AutobotPolicy::ShouldEmergencyAdvance(
+				memory.noGoalTicks, failures.noGoals))
 			{
 				Printf("Autoplayer: emergency level advance (%s).\n",
 					gamestate.mapname);
@@ -737,7 +744,9 @@ namespace
 		hasTarget = true;
 		memory.waypoint = -1;
 		const double distanceTiles = std::sqrt(nearest) / TILEGLOBAL;
-		const bool aimed = TurnToward(pawn, cmd, target->x, target->y, 9);
+		const bool aimed = TurnToward(pawn, cmd, target->x, target->y, 6);
+		if(memory.ticks % (70 * 5) == 0)
+			LogEvent("combat", "visible_hostile", target->tilex, target->tiley);
 		if(SelectCombatWeapon(pawn, cmd, distanceTiles))
 		{
 			cmd.controly = distanceTiles < 2.0 ? 30 : 0;
@@ -790,8 +799,8 @@ namespace
 		const bool semiAuto = !!(weapon->weaponFlags & WF_NOAUTOFIRE);
 		cmd.buttonstate[bt_attack] = !semiAuto || (memory.ticks % 16 == 0);
 		const bool cautious = pawn->health < (failures.deaths >= 2 ? 70 : 45);
-		cmd.controly = distanceTiles < 2.0 ? 34 :
-			(cautious && distanceTiles < 4.0 ? 15 : 0);
+		cmd.controly = AutobotPolicy::RangedMovementSpeed(distanceTiles,
+			cautious, memory.threat[Index(pawn->tilex, pawn->tiley)]);
 
 		if(!melee && distanceTiles > 1.5 && distanceTiles < 6.5)
 		{
@@ -809,9 +818,11 @@ namespace
 			const bool negativeClear = Inside(nx, ny) &&
 				CanEnter(nx, ny, pawn->tilex, pawn->tiley, pawn);
 			const unsigned int positiveRisk = positiveClear ?
-				memory.threat[Index(px, py)] : 12;
+				memory.threat[Index(px, py)] +
+				memory.deathDanger[Index(px, py)] * 4U : 24U;
 			const unsigned int negativeRisk = negativeClear ?
-				memory.threat[Index(nx, ny)] : 12;
+				memory.threat[Index(nx, ny)] +
+				memory.deathDanger[Index(nx, ny)] * 4U : 24U;
 			cmd.controlstrafe = 42 * AutobotPolicy::ThreatDodgeDirection(
 				memory.ticks, positiveClear, negativeClear,
 				positiveRisk, negativeRisk);
@@ -891,7 +902,8 @@ namespace
 			}
 		}
 
-		if(memory.failedRecoveryTicks > 70 * 180)
+		if(AutobotPolicy::ShouldEmergencyAdvance(
+			memory.failedRecoveryTicks, memory.detours))
 		{
 			Printf("Autoplayer: emergency advance after prolonged route failures.\n");
 			LogEvent("emergency_advance", "prolonged_obstruction");
@@ -944,7 +956,9 @@ bool Bot_AdvanceEpisode()
 		return false;
 	if(episodeIndex < 0)
 	{
-		LogEvent("campaign_complete", "no_episode_metadata");
+		// Unknown episode metadata cannot prove campaign completion.
+		// Report this as incomplete rather than a false-positive success.
+		LogEvent("failure", "no_episode_metadata");
 		BotEnabled = false;
 		return false;
 	}
