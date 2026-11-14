@@ -664,7 +664,9 @@ namespace
 		if(ready && player->weapons.LocateWeapon(ready->GetClass(),
 			&currentSlot, &index))
 		{
-			const bool melee = !ready->ammo[0] && !ready->ammo[1];
+			const bool melee = AutobotPolicy::IsMeleeWeapon(
+				!!ready->ammo[0], !!ready->ammo[1],
+				ready->ammouse[AWeapon::PrimaryFire]);
 			const unsigned int ammo = ready->ammo[0] ?
 				ready->ammo[0]->amount :
 				(ready->ammo[1] ?
@@ -686,7 +688,9 @@ namespace
 				if(!weapon || !weapon->IsKindOf(NATIVE_CLASS(Weapon)) ||
 					!weapon->CheckAmmo(AWeapon::PrimaryFire, false))
 					continue;
-				const bool melee = !weapon->ammo[0] && !weapon->ammo[1];
+				const bool melee = AutobotPolicy::IsMeleeWeapon(
+					!!weapon->ammo[0], !!weapon->ammo[1],
+					weapon->ammouse[AWeapon::PrimaryFire]);
 				const unsigned int ammo = weapon->ammo[0] ?
 					weapon->ammo[0]->amount :
 					(weapon->ammo[1] ?
@@ -753,7 +757,9 @@ namespace
 			return;
 		}
 
-		const bool melee = !weapon->ammo[0] && !weapon->ammo[1];
+		const bool melee = AutobotPolicy::IsMeleeWeapon(
+			!!weapon->ammo[0], !!weapon->ammo[1],
+			weapon->ammouse[AWeapon::PrimaryFire]);
 		if(melee)
 		{
 			// Never use the ranged-weapon retreat behavior for knife/punch
