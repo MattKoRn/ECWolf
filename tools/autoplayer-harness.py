@@ -8,6 +8,7 @@ import argparse
 import collections
 import concurrent.futures
 import json
+import os
 import pathlib
 import subprocess
 import sys
@@ -43,6 +44,12 @@ def run_campaign(engine, campaign, data_dir, out_dir, seconds, start_map,
     ext, required = CAMPAIGNS[campaign]
     validate_data(data_dir, required)
     out_dir.mkdir(parents=True, exist_ok=True)
+    # Keep simultaneous engine processes from racing to overwrite
+    # Documents/ECWolfRPG/profile.rpg or each other's temporary save files.
+    profile_dir = (out_dir / (campaign + "-rpg-profile")).resolve()
+    profile_dir.mkdir(parents=True, exist_ok=True)
+    child_env = os.environ.copy()
+    child_env["ECWOLF_RPG_PROFILE_DIR"] = str(profile_dir)
     telemetry = out_dir / (campaign + "-events.log")
     output = out_dir / (campaign + "-engine.log")
     # Prevent stale logs from being mistaken for a successful new run.
@@ -59,7 +66,7 @@ def run_campaign(engine, campaign, data_dir, out_dir, seconds, start_map,
     with output.open("w", encoding="utf-8") as capture:
         proc = subprocess.Popen(cmd, cwd=str(data_dir), stdout=capture,
                                 stderr=subprocess.STDOUT,
-                                stdin=subprocess.DEVNULL)
+                                stdin=subprocess.DEVNULL, env=child_env)
         try:
             while True:
                 exit_code = proc.poll()
@@ -98,6 +105,7 @@ def run_campaign(engine, campaign, data_dir, out_dir, seconds, start_map,
     return {
         "campaign": campaign,
         "status": status,
+        "rpg_profile_directory": str(profile_dir),
         "seconds": round(time.monotonic() - start, 2),
         "engine_exit_code": exit_code,
         "map_starts": counts.get("map_start", 0),
