@@ -28,6 +28,7 @@ jobs:
           -DCMAKE_INSTALL_PREFIX="$PWD/dist"
           -DINTERNAL_ZLIB=ON -DINTERNAL_BZIP2=ON -DINTERNAL_JPEG=ON
           -DINTERNAL_SDL=ON -DINTERNAL_SDL_MIXER=ON -DINTERNAL_SDL_NET=ON
+          -DINTERNAL_SDL_MIXER_CODECS=ON
       - name: Build
         shell: pwsh
         run: cmake --build build/autoplayer-ci --config Release --parallel
