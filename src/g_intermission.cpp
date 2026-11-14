@@ -49,6 +49,7 @@
 #include "wl_menu.h"
 #include "wl_net.h"
 #include "wl_play.h"
+#include "wl_autobot.h"
 #include "thingdef/thingdef.h"
 
 static TMap<FName, IntermissionInfo> intermissions;
@@ -85,6 +86,8 @@ static void ClearStatusbar()
 
 static bool WaitIntermission(unsigned int time)
 {
+	if(BotEnabled)
+		return true;
 	if(time)
 	{
 		return IN_UserInput(time, ACK_Any);
@@ -341,7 +344,7 @@ EscSequence:
 	if(viewsize > 20)
 		NewViewSize(viewsize);
 
-	if(!gototitle && !demoMode)
+	if(!gototitle && !demoMode && !BotEnabled)
 	{
 		// Hold at the final page until esc is pressed
 		IN_ClearKeysDown();
