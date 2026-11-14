@@ -51,10 +51,11 @@ To explicitly rerun CMake configuration without discarding compiled files, use
 - Prioritizes keys, urgent health/ammo, exits, switches, and reachable monsters; unsuccessful exit attempts are cooled down so boss-gated objectives can be pursued.
 - Operates normal player movement, Use, and Attack inputs rather than
   teleporting in normal play.
-- Fights visible monsters with strafing and backsteps where geometry permits, approaching distant targets instead of wasting ammunition at excessive range. With a melee weapon, the bot instead pushes into striking range, attacks while closing the last gap and does not retreat just because the opponent is nearby.
+- Fights visible monsters with tighter aim, threat-aware strafing, learned-death-location avoidance, and stronger backsteps at low health. With a melee weapon, the bot pushes into striking range and attacks while closing the last gap.
+- Treats health and ammunition as urgent sooner when local threats or repeated deaths raise risk; low-risk supplies remain secondary to exits.
 - During F12 auto-play, the renderer scales camera movement bob and weapon bob to 25% of normal, reducing rapid visual shaking. Turning, damage, collisions and manual-play visuals are unchanged.
 - On unattended death, restarts the level with ECWolf's native respawn flow (not world snapshots), remembers lethal tiles, and adopts more cautious movement after repeat deaths. The account-wide RPG profile still persists independently.
-- On movement failure, temporarily blocks the obstructed waypoint and tries alternate routes. Repeated failed detours can trigger logged temporary noclip and, after prolonged failure, an **emergency level advance**. These fallbacks are not cheat-free.
+- On movement failure, temporarily blocks the obstructed waypoint and tries alternate routes. Temporary noclip now requires at least four failed detours plus an eight-second sustained stall after those retries. An **emergency level advance** requires eight minutes of persistent failure and at least four recorded recovery failures. These logged fallbacks are not cheat-free and should never be confused with normal exit completion.
 - Attempts to continue into the next available episode after an episode
   ending. Skips certain modal end screens in unattended mode.
 
@@ -118,16 +119,22 @@ python tools/autoplayer-harness.py --engine "C:\Path\To\ecwolf.exe" --campaign b
 The Wolf directory must contain `GAMEMAPS.WL6`, `MAPHEAD.WL6`
 and `VSWAP.WL6`. The Spear directory needs their corresponding
 `.SOD` files. File names are checked case-insensitively. Select
-`--campaign wolf3d` or `--campaign spear` for individual runs;
-the optional `--start-map` defaults to `MAP01`. The game-data
-directory is the engine's working directory during each run.
+`--campaign wolf3d` or `--campaign spear` for individual runs.
+`--campaign both` launches **both campaigns simultaneously**, using separate
+game-data working directories, logs, and isolated RPG profile directories under
+`--out-dir`. This avoids writing to the normal account-wide
+`Documents/ECWolfRPG/profile.rpg` during parallel tests. Pass
+`--sequential` to run one after another instead. The optional
+`--start-map` defaults to `MAP01`. No proprietary data is supplied.
 
-Reports in `--out-dir` include `summary.json`, an engine-output log and
-an event log per campaign. Events record `map_start`, `goal`, `switch_use`,
+Reports in `--out-dir` include `summary.json` with the execution mode,
+an engine-output log, an event log, and a separate RPG profile directory
+per campaign. Events record `map_start`, `goal`, `combat`, `switch_use`,
 `exit_retry`, `weapon_select`, `failure` with a cause,
 `emergency_noclip`, `emergency_advance` and `campaign_complete`.
-The harness only reports success after observing an explicit
-`campaign_complete` event. A timeout, crash or early exit is incomplete;
+The harness only reports success after observing both a real `map_start` and
+an explicit `campaign_complete` event. Unknown episode metadata is treated
+as a failed/incomplete campaign, **not** automatic completion. A timeout, crash or early exit is incomplete;
 the report preserves the evidence for diagnosis. The engine itself does
 not automatically quit after campaign completion; the harness ends the
 process after receiving the completion event.
@@ -138,9 +145,9 @@ The synthetic (non-proprietary) harness tests can be run with:
 python -m unittest discover -s tests -p "test_autoplayer_harness.py" -v
 ```
 
-These verify the process runner, data-file validation, log parsing and
-incomplete-run handling **without** proving that a full Wolf3D or Spear
-campaign succeeds. Windows and Linux CI also runs the standalone C++
+These verify the process runner, concurrent campaign startup, RPG profile
+isolation, data-file validation, log parsing and incomplete-run handling
+**without** proving that a full Wolf3D or Spear campaign succeeds. Windows and Linux CI also runs the standalone C++
 policy tests. A full in-engine playthrough and an actual Windows build
 still require independent verification.
 
