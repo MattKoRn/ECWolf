@@ -6,6 +6,7 @@ functional ECWolf installation are required on the target machine.
 """
 import argparse
 import collections
+import concurrent.futures
 import json
 import pathlib
 import subprocess
@@ -63,7 +64,7 @@ def run_campaign(engine, campaign, data_dir, out_dir, seconds, start_map,
             while True:
                 exit_code = proc.poll()
                 events = read_events(telemetry)
-                if "campaign_complete" in events:
+                if "campaign_complete" in events and "map_start" in events:
                     completed = True
                     break
                 if exit_code is not None:
@@ -123,6 +124,8 @@ def main(argv=None):
     parser.add_argument("--minutes", type=float, default=20.0,
                         help="Runtime budget per campaign, not a level timeout")
     parser.add_argument("--start-map", default="MAP01")
+    parser.add_argument("--sequential", action="store_true",
+                        help="Run both campaigns one after another rather than concurrently")
     args = parser.parse_args(argv)
     if args.minutes <= 0:
         parser.error("--minutes must be positive")
@@ -140,23 +143,43 @@ def main(argv=None):
     except ValueError as exc:
         parser.error(str(exc))
 
-    results = []
-    for campaign in campaigns:
+    # Each engine gets its own game-data working directory and telemetry
+    # files. For "both", launch both processes together, then keep summary
+    # ordering deterministic regardless of which campaign finishes first.
+    mode = "parallel" if len(campaigns) == 2 and not args.sequential else "sequential"
+
+    def run_one(campaign):
         data_dir = sources[campaign].expanduser().resolve()
-        print("Running {} using local data at {}".format(campaign, data_dir),
-              flush=True)
         try:
-            result = run_campaign(engine, campaign, data_dir, output,
-                                  args.minutes * 60.0, args.start_map)
+            return run_campaign(engine, campaign, data_dir, output,
+                                args.minutes * 60.0, args.start_map)
         except OSError as exc:
-            result = {"campaign": campaign, "status": "launch_failed",
-                      "error": str(exc)}
-        results.append(result)
-        print("{}: {}".format(campaign, result["status"]), flush=True)
+            return {"campaign": campaign, "status": "launch_failed",
+                    "error": str(exc)}
+
+    results_by_campaign = {}
+    if mode == "parallel":
+        print("Running Wolfenstein 3D and Spear of Destiny concurrently",
+              flush=True)
+        with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:
+            futures = {pool.submit(run_one, name): name for name in campaigns}
+            for future in concurrent.futures.as_completed(futures):
+                name = futures[future]
+                results_by_campaign[name] = future.result()
+                print("{}: {}".format(name,
+                      results_by_campaign[name]["status"]), flush=True)
+    else:
+        for name in campaigns:
+            print("Running {} using local data at {}".format(
+                name, sources[name]), flush=True)
+            results_by_campaign[name] = run_one(name)
+            print("{}: {}".format(name,
+                  results_by_campaign[name]["status"]), flush=True)
+    results = [results_by_campaign[name] for name in campaigns]
     output.mkdir(parents=True, exist_ok=True)
     report = output / "summary.json"
-    report.write_text(json.dumps({"results": results}, indent=2) + "\n",
-                      encoding="utf-8")
+    report.write_text(json.dumps({"execution_mode": mode, "results": results},
+                                 indent=2) + "\n", encoding="utf-8")
     print("Report:", report)
     return 0 if all(x["status"] == "completed" for x in results) else 2
 
