@@ -37,6 +37,7 @@
 #include "wl_iwad.h"
 #include "wl_play.h"
 #include "wl_autobot.h"
+#include "wl_rpg.h"
 #include "wl_game.h"
 #include "wl_loadsave.h"
 #include "wl_net.h"
@@ -1268,6 +1269,7 @@ void atterm(void (*func)(void))
 
 static void CallTerminateFunctions()
 {
+	RPG::Shutdown();
 	ShutdownId();
 	WriteConfig();
 
@@ -1290,6 +1292,7 @@ int WL_Main (int argc, char *argv[])
 		setlocale(LC_ALL, "C");
 
 		FileSys::SetupPaths(argc, argv);
+	RPG::Initialize();
 
 		// Find the program directory.
 		FString progdir(FileSys::GetDirectoryPath(FileSys::DIR_Program));
