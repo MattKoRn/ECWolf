@@ -133,8 +133,11 @@ per campaign. Events record `map_start`, `goal`, `combat`, `switch_use`,
 `exit_retry`, `weapon_select`, `failure` with a cause,
 `emergency_noclip`, `emergency_advance` and `campaign_complete`.
 The harness only reports success after observing both a real `map_start` and
-an explicit `campaign_complete` event. Unknown episode metadata is treated
-as a failed/incomplete campaign, **not** automatic completion. A timeout, crash or early exit is incomplete;
+an explicit `campaign_complete` event **without** any
+`emergency_advance` event. Runs that reached the end by skipping levels
+are reported as `completed_with_skipped_maps` and return a failing exit code.
+Unknown episode metadata is treated as a failed/incomplete campaign, **not**
+automatic completion. A timeout, crash or early exit is incomplete;
 the report preserves the evidence for diagnosis. The engine itself does
 not automatically quit after campaign completion; the harness ends the
 process after receiving the completion event.
