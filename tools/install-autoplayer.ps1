@@ -57,7 +57,9 @@ Run-Checked "cmake" @(
     "-S", $repo, "-B", $build, "-G", $generator, "-A", "x64",
     "-DCMAKE_INSTALL_PREFIX=$InstallRoot",
     "-DINTERNAL_ZLIB=ON", "-DINTERNAL_BZIP2=ON", "-DINTERNAL_JPEG=ON",
-    "-DINTERNAL_SDL=ON", "-DINTERNAL_SDL_MIXER=ON", "-DINTERNAL_SDL_NET=ON"
+    "-DINTERNAL_SDL=ON", "-DINTERNAL_SDL_MIXER=ON", "-DINTERNAL_SDL_NET=ON",
+    # Build SDL_mixer codecs from its recursive submodules instead of requiring system OpusFile.
+    "-DINTERNAL_SDL_MIXER_CODECS=ON"
 )
 Write-Host "=== Compiling ==="
 Run-Checked "cmake" @("--build", $build, "--config", "Release", "--parallel")
