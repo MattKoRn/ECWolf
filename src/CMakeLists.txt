@@ -131,6 +131,7 @@ initial_sources(
 	weaponslots.cpp
 	wl_act2.cpp
 	wl_agent.cpp
+	wl_autobot.cpp
 	wl_atmos.cpp
 	wl_cloudsky.cpp
 	wl_debug.cpp
