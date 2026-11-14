@@ -70,8 +70,8 @@ The standalone C++ regression suite in `tests/test_autobot_policy.cpp` checks ro
 
 ```text
 cmake -S tests -B build/autoplayer-policy
-cmake --build build/autoplayer-policy
-ctest --test-dir build/autoplayer-policy --output-on-failure
+cmake --build build/autoplayer-policy --config Release
+ctest --test-dir build/autoplayer-policy -C Release --output-on-failure
 ```
 
 Both `.github/workflows/autoplayer-windows.yml` and `.github/workflows/autoplayer-linux-smoke.yml` run it before compiling the engine. A successful Windows build and complete unattended gameplay **must still be verified** before treating this as production-ready. Inspect the GitHub Actions runs for
