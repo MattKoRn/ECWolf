@@ -236,8 +236,10 @@ namespace
 			if(!CanEnter(x, y, fromX, fromY, pawn))
 				return -1;
 			MapSpot spot = map->GetSpot(x, y, 0);
-			return AutobotPolicy::TravelCost(
-				spot->tile != NULL, memory.deathDanger[to]);
+			const bool closed = spot->tile &&
+				spot->slideAmount[0] != 0xffff &&
+				spot->slideAmount[1] != 0xffff;
+			return AutobotPolicy::TravelCost(closed, memory.deathDanger[to]);
 		}
 		APlayerPawn *pawn;
 		int width;
