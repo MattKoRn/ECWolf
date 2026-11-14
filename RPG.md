@@ -12,6 +12,10 @@ lives alongside the existing F12 autoplayer and ordinary ECWolf save system.
 3. Open **Options → RPG Progression**. Choose **View RPG Profile**, manually
    spend points, or select **Auto Assign All Points** for a balanced allocation.
 4. Kill enemies to earn permanent RPG XP. Levels grant five permanent stat points.
+   Each successive level requires more XP: **100 + 40 × current level + 20 × current level²**
+   (160 XP at level 1, 260 at level 2, 400 at level 3, and 800 at level 5).
+   The quadratic curve uses arbitrary-precision values; existing saved levels,
+   accumulated XP and stat points are preserved.
 5. Relaunch the game to see an in-game summary of XP earned while offline.
 
 ## Permanent stats
