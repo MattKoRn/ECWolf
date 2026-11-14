@@ -163,6 +163,8 @@ namespace
 
 		if(memory.usedEmergencyNoclip)
 			noclip = memory.originalNoclip;
+		if(memory.seenMap)
+			LogEvent("map_end", "map_changed");
 		memory = BotState();
 		memory.seenMap = map;
 		std::strncpy(memory.mapName, gamestate.mapname, 9);
@@ -627,6 +629,66 @@ namespace
 			FRACUNIT / 4 ? -24 : -65;
 	}
 
+
+	// Use normal weapon-slot input, not direct inventory mutation. This
+	// respects ECWolf's weapon animations and any mod-provided slot setup.
+	bool SelectCombatWeapon(APlayerPawn *pawn, TicCmd_t &cmd,
+		double distanceTiles)
+	{
+		player_t *player = pawn->player;
+		if(memory.ticks - memory.lastWeaponTick < 70 ||
+			player->PendingWeapon != WP_NOCHANGE)
+			return false;
+
+		AWeapon *ready = player->ReadyWeapon;
+		int currentSlot = 0, index = 0;
+		int currentScore = -1000;
+		if(ready && player->weapons.LocateWeapon(ready->GetClass(),
+			&currentSlot, &index))
+		{
+			const bool melee = !ready->ammo[0] && !ready->ammo[1];
+			const unsigned int ammo = ready->ammo[0] ?
+				static_cast<unsigned int>(std::max(0, ready->ammo[0]->amount)) :
+				(ready->ammo[1] ?
+					static_cast<unsigned int>(std::max(0, ready->ammo[1]->amount)) : 0);
+			currentScore = AutobotPolicy::WeaponScore(currentSlot, ammo, melee,
+				distanceTiles, memory.threat[Index(pawn->tilex, pawn->tiley)]);
+			if(!ready->CheckAmmo(AWeapon::PrimaryFire, false))
+				currentScore = -1000;
+		}
+
+		int bestSlot = -1, bestScore = currentScore + 12;
+		for(int slot = 0; slot < NUM_WEAPON_SLOTS; ++slot)
+		{
+			for(int i = 0; i < player->weapons.Slots[slot].Size(); ++i)
+			{
+				const ClassDef *type = player->weapons.Slots[slot].GetWeapon(i);
+				if(!type) continue;
+				AWeapon *weapon = static_cast<AWeapon *>(pawn->FindInventory(type));
+				if(!weapon || !weapon->IsKindOf(NATIVE_CLASS(Weapon)) ||
+					!weapon->CheckAmmo(AWeapon::PrimaryFire, false))
+					continue;
+				const bool melee = !weapon->ammo[0] && !weapon->ammo[1];
+				const unsigned int ammo = weapon->ammo[0] ?
+					static_cast<unsigned int>(std::max(0, weapon->ammo[0]->amount)) :
+					(weapon->ammo[1] ?
+						static_cast<unsigned int>(std::max(0, weapon->ammo[1]->amount)) : 0);
+				const int score = AutobotPolicy::WeaponScore(slot, ammo, melee,
+					distanceTiles, memory.threat[Index(pawn->tilex, pawn->tiley)]);
+				if(score > bestScore && weapon != ready)
+				{
+					bestScore = score;
+					bestSlot = slot;
+				}
+			}
+		}
+		if(bestSlot < 0) return false;
+		cmd.buttonstate[bestSlot == 0 ? bt_slot0 : bt_slot1 + bestSlot - 1] = true;
+		memory.lastWeaponTick = memory.ticks;
+		LogEvent("weapon_select", "higher_utility", pawn->tilex, pawn->tiley);
+		return true;
+	}
+
 	void Fight(APlayerPawn *pawn, TicCmd_t &cmd, bool &hasTarget)
 	{
 		hasTarget = false;
@@ -652,6 +714,11 @@ namespace
 		memory.waypoint = -1;
 		const double distanceTiles = std::sqrt(nearest) / TILEGLOBAL;
 		const bool aimed = TurnToward(pawn, cmd, target->x, target->y, 9);
+		if(SelectCombatWeapon(pawn, cmd, distanceTiles))
+		{
+			cmd.controly = distanceTiles < 2.0 ? 30 : 0;
+			return;
+		}
 		AWeapon *weapon = pawn->player->ReadyWeapon;
 		if(!weapon)
 		{
@@ -699,8 +766,13 @@ namespace
 				CanEnter(px, py, pawn->tilex, pawn->tiley, pawn);
 			const bool negativeClear = Inside(nx, ny) &&
 				CanEnter(nx, ny, pawn->tilex, pawn->tiley, pawn);
-			cmd.controlstrafe = 42 * AutobotPolicy::StrafeDirection(
-				memory.ticks, positiveClear, negativeClear);
+			const unsigned int positiveRisk = positiveClear ?
+				memory.threat[Index(px, py)] : 12;
+			const unsigned int negativeRisk = negativeClear ?
+				memory.threat[Index(nx, ny)] : 12;
+			cmd.controlstrafe = 42 * AutobotPolicy::ThreatDodgeDirection(
+				memory.ticks, positiveClear, negativeClear,
+				positiveRisk, negativeRisk);
 		}
 	}
 
@@ -753,6 +825,10 @@ namespace
 				memory.blockedCellUntil[memory.waypoint] = memory.ticks + 70 * 8;
 				++memory.detours;
 				memory.stuck = 0;
+				++failures.detours;
+				LogEvent("failure", "movement_obstruction",
+					memory.waypoint % static_cast<int>(memory.width),
+					memory.waypoint / static_cast<int>(memory.width));
 				Printf("Autoplayer: detour %u around (%d,%d).\n",
 					memory.detours,
 					memory.waypoint % static_cast<int>(memory.width),
@@ -766,16 +842,36 @@ namespace
 				memory.usedEmergencyNoclip = true;
 				memory.emergencyUntil = memory.ticks + 210;
 				Printf("Autoplayer: emergency noclip after failed detours.\n");
+				LogEvent("emergency_noclip", "repeated_obstruction");
 			}
 		}
 
 		if(memory.failedRecoveryTicks > 70 * 180)
 		{
 			Printf("Autoplayer: emergency advance after prolonged route failures.\n");
+			LogEvent("emergency_advance", "prolonged_obstruction");
 			playstate = ex_completed;
 		}
 	}
 
+}
+
+
+// Can be enabled only via the optional command-line harness or by setting
+// an explicit log path. Routine F12 use does not create files.
+void Bot_SetLogPath(const char *path)
+{
+	if(botLog)
+	{
+		std::fclose(botLog);
+		botLog = NULL;
+	}
+	if(path && *path)
+	{
+		botLog = std::fopen(path, "w");
+		if(!botLog)
+			std::fprintf(stderr, "Autoplayer: could not open event log: %s\n", path);
+	}
 }
 
 void Bot_NewGame(const FString &startMap, int difficulty)
@@ -807,11 +903,13 @@ bool Bot_AdvanceEpisode()
 		const FString &start = EpisodeInfo::GetEpisode(i).StartMap;
 		if(!GameMap::CheckMapExists(start))
 			continue;
+		LogEvent("episode_advance", "next_available_episode");
 		Printf("Autoplayer: starting episode %u of %u.\n",
 			i + 1, EpisodeInfo::GetNumEpisodes());
 		NewGame(selectedDifficulty, start, false);
 		return true;
 	}
+	LogEvent("campaign_complete", "all_available_episodes");
 	BotEnabled = false;
 	Printf("Autoplayer: all available episodes completed.\n");
 	return false;
@@ -825,6 +923,7 @@ void Bot_Update(TicCmd_t &cmd)
 	{
 		BotEnabled = !BotEnabled;
 		Printf("Autoplayer: %s (F12).\n", BotEnabled ? "enabled" : "disabled");
+		LogEvent("toggle", BotEnabled ? "enabled" : "disabled");
 	}
 	wasF12 = f12;
 
@@ -883,6 +982,9 @@ bool Bot_ResumeAfterDeath()
 		failures.danger.assign(total, 0);
 	}
 	++failures.deaths;
+	LogEvent("failure", "player_death",
+		players[ConsolePlayer].mo ? players[ConsolePlayer].mo->tilex : -1,
+		players[ConsolePlayer].mo ? players[ConsolePlayer].mo->tiley : -1);
 	APlayerPawn *deadPawn = players[ConsolePlayer].mo;
 	if(deadPawn)
 	{
