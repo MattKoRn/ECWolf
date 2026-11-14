@@ -14,6 +14,7 @@
 #include "thingdef/thingdef.h"
 #include "lnspec.h"
 #include "wl_agent.h"
+#include "wl_autobot.h"
 #include "a_inventory.h"
 #include "a_keys.h"
 #include "m_random.h"
@@ -713,6 +714,9 @@ void player_t::BobWeapon (fixed *x, fixed *y)
 	// Bob the weapon based on movement speed.
 	int angle = (bobspeed*35/TICRATE*gamestate.TimeCount)&FINEMASK;
 	fixed curbob = (flags & PF_WEAPONBOBBING) ? bob : 0;
+	// Match the reduced camera motion while the F12 bot is active.
+	if(BotEnabled && Net::InitVars.mode == Net::MODE_SinglePlayer)
+		curbob /= 4;
 
 	if (curbob != 0)
 	{
