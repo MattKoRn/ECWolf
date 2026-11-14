@@ -824,9 +824,8 @@ restartgame:
 
 		PlayLoop ();
 
-		// A death can be rolled back without re-entering the game menu.
-		if(playstate == ex_died)
-			Bot_ReloadCheckpoint();
+		// Restore snapshots in PlayLoop at a safe frame boundary, not during
+		// death/respawn transitions here in GameLoop.
 
 		if(playstate == ex_victorious)
 		{
