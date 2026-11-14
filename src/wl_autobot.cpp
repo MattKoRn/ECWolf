@@ -636,6 +636,7 @@ namespace
 		double distanceTiles)
 	{
 		player_t *player = pawn->player;
+		if(!Inside(pawn->tilex, pawn->tiley)) return false;
 		if(memory.ticks - memory.lastWeaponTick < 70 ||
 			player->PendingWeapon != WP_NOCHANGE)
 			return false;
@@ -648,9 +649,9 @@ namespace
 		{
 			const bool melee = !ready->ammo[0] && !ready->ammo[1];
 			const unsigned int ammo = ready->ammo[0] ?
-				static_cast<unsigned int>(std::max(0, ready->ammo[0]->amount)) :
+				ready->ammo[0]->amount :
 				(ready->ammo[1] ?
-					static_cast<unsigned int>(std::max(0, ready->ammo[1]->amount)) : 0);
+					ready->ammo[1]->amount : 0);
 			currentScore = AutobotPolicy::WeaponScore(currentSlot, ammo, melee,
 				distanceTiles, memory.threat[Index(pawn->tilex, pawn->tiley)]);
 			if(!ready->CheckAmmo(AWeapon::PrimaryFire, false))
@@ -670,9 +671,9 @@ namespace
 					continue;
 				const bool melee = !weapon->ammo[0] && !weapon->ammo[1];
 				const unsigned int ammo = weapon->ammo[0] ?
-					static_cast<unsigned int>(std::max(0, weapon->ammo[0]->amount)) :
+					weapon->ammo[0]->amount :
 					(weapon->ammo[1] ?
-						static_cast<unsigned int>(std::max(0, weapon->ammo[1]->amount)) : 0);
+						weapon->ammo[1]->amount : 0);
 				const int score = AutobotPolicy::WeaponScore(slot, ammo, melee,
 					distanceTiles, memory.threat[Index(pawn->tilex, pawn->tiley)]);
 				if(score > bestScore && weapon != ready)
