@@ -330,7 +330,9 @@ double Power() {
         0.025 * std::sqrt(static_cast<double>(total)));
 }
 unsigned int RandomPercent(unsigned int min, unsigned int max) {
-    return min + static_cast<unsigned int>(pr_rpg()) % (max - min + 1);
+    // FRandom::operator() without a modulus returns only 0..255.
+    // Use the full 32-bit generator so 10,000-way rarity rolls are possible.
+    return min + static_cast<unsigned int>(pr_rpg(static_cast<int>(max - min + 1)));
 }
 unsigned int NumericStat(RPG::Stat s, unsigned int cap = 1000000) {
     return static_cast<unsigned int>(profile.stat[s].Capped(cap));
