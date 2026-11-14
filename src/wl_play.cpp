@@ -1104,21 +1104,11 @@ void PlayLoop (void)
 		}
 
 		PlayFrame();
-		// Checkpoint saves and loads modify the map/render state. Keep both
-		// outside PollControls and the thinker loop, including death recovery.
-		Bot_SaveCheckpoint();
 		// Show after the first rendered frame, not while the screen is faded.
 		RPG::ShowOfflinePopup();
 
-		// Leave the gameplay loop before restoring a snapshot. GameSave::Load
-		// replaces the entire map and player pawn, so GameLoop must own it.
-		if (Bot_WantsReload())
-		{
-			playstate = ex_abort;
-			break;
-		}
-		// No checkpoint (or no retries): use the engine's Died()/Reborn()
-		// transition directly rather than leaving the bot in a death fade.
+		// Bot death leaves the play loop using the engine's ordinary
+		// Died()/Reborn() transition. Never load a save during death recovery.
 		if (Bot_ResumeAfterDeath())
 			break;
 
