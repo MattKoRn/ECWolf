@@ -141,6 +141,7 @@ namespace AutobotPolicy
 		if(ammo < 5) score -= 70;
 		else if(ammo < 12) score -= 25;
 		if(distanceTiles > 4.0 && slot <= 1) score -= 15;
+		if(threat >= 5 && slot >= 2) score += 12; // Stronger attacks under pressure.
 		if(distanceTiles < 1.5 && slot >= 5) score -= 25;
 		return score;
 	}
