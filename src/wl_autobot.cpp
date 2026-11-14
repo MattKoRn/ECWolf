@@ -6,8 +6,11 @@
  * navigation. The last-resort completion below is opt-in through BotEnabled
  * and only considered after an extended, unrecoverable navigation failure.
  */
+#include <algorithm>
 #include <cmath>
 #include <climits>
+#include <functional>
+#include <utility>
 #include <cstring>
 #include <cstdlib>
 #include <queue>
@@ -15,6 +18,7 @@
 
 #include "wl_def.h"
 #include "wl_autobot.h"
+#include "wl_autobot_policy.h"
 #include "wl_agent.h"
 #include "wl_game.h"
 #include "wl_main.h"
@@ -50,7 +54,8 @@ namespace
 		BotState() : seenMap(NULL), width(0), height(0), ticks(0),
 			stuck(0), lastPositionTick(0), lastX(0), lastY(0),
 			usedEmergencyNoclip(false), originalNoclip(false),
-			emergencyUntil(0), noGoalTicks(0)
+			emergencyUntil(0), noGoalTicks(0), detours(0),
+			failedRecoveryTicks(0), waypoint(-1)
 		{
 			mapName[0] = '\0';
 		}
@@ -62,6 +67,9 @@ namespace
 		unsigned int lastPositionTick;
 		fixed lastX, lastY;
 		std::vector<unsigned char> visited;
+		std::vector<unsigned int> blockedCellUntil;
+		std::vector<unsigned char> deathDanger;
+		std::vector<unsigned int> exitRetryAfter;
 		std::vector<unsigned char> usedSwitch;
 		std::vector<unsigned int> blockedDoorUntil;
 		std::vector<unsigned int> doorLastUse;
@@ -70,8 +78,19 @@ namespace
 		bool usedEmergencyNoclip, originalNoclip;
 		unsigned int emergencyUntil;
 		unsigned int noGoalTicks;
+		unsigned int detours, failedRecoveryTicks;
+		int waypoint;
 		char mapName[9];
 	} memory;
+
+	// Death danger survives an engine-native respawn; world state never does.
+	struct FailureHistory
+	{
+		FailureHistory() : deaths(0) { mapName[0] = 0; }
+		char mapName[9];
+		unsigned int deaths;
+		std::vector<unsigned char> danger;
+	} failures;
 
 	struct Goal
 	{
@@ -95,6 +114,13 @@ namespace
 	{
 		return action == Specials::Door_Open ||
 			action == Specials::Door_Elevator;
+	}
+
+	bool InteractiveSpecial(unsigned int action)
+	{
+		return DoorSpecial(action) ||
+			action == Specials::Pushwall_Move ||
+			action == Specials::Pushwall_MoveNoStop;
 	}
 
 	bool Inside(int x, int y)
@@ -131,6 +157,13 @@ namespace
 		memory.doorLastUse.resize(header.width * header.height, 0);
 		memory.doorWaitSince.resize(header.width * header.height, 0);
 		memory.doorAttempts.resize(header.width * header.height, 0);
+		memory.blockedCellUntil.resize(header.width * header.height, 0);
+		memory.exitRetryAfter.resize(header.width * header.height, 0);
+		if(std::strncmp(failures.mapName, gamestate.mapname, 9) == 0 &&
+			failures.danger.size() == header.width * header.height)
+			memory.deathDanger = failures.danger;
+		else
+			memory.deathDanger.resize(header.width * header.height, 0);
 		memory.lastX = pawn->x;
 		memory.lastY = pawn->y;
 		Printf("Autoplayer: map %s (%ux%u).\n",
@@ -144,6 +177,9 @@ namespace
 			return false;
 		if(noclip)
 			return true;
+		const int tile = Index(x, y);
+		if(memory.blockedCellUntil[tile] > memory.ticks)
+			return false;
 
 		MapSpot spot = map->GetSpot(x, y, 0);
 		if(!spot->tile)
@@ -153,7 +189,9 @@ namespace
 		if(spot->slideAmount[0] == 0xffff ||
 			spot->slideAmount[1] == 0xffff)
 			return true;
-		const int tile = Index(x, y);
+		// A moving pushwall may clear this cell shortly.
+		if(spot->pushAmount != 0 && spot->thinker)
+			return true;
 		if(memory.blockedDoorUntil[tile] > memory.ticks)
 			return false;
 
@@ -168,24 +206,25 @@ namespace
 		for(unsigned int t = 0; t < spot->triggers.Size(); ++t)
 		{
 			const MapTrigger &trig = spot->triggers[t];
-			if(!DoorSpecial(trig.action) || !trig.playerUse ||
+			if(!InteractiveSpecial(trig.action) || !trig.playerUse ||
 				(!trig.active && !trig.repeatable) || !trig.activate[side])
 				continue;
-			if(trig.arg[3] && !P_CheckKeys(pawn, trig.arg[3], true))
+			if(DoorSpecial(trig.action) && trig.arg[3] &&
+				!P_CheckKeys(pawn, trig.arg[3], true))
 				continue;
 			return true;
 		}
 		return false;
 	}
 
-	void BlockDoor(int tile)
+	void BlockInteractive(int tile)
 	{
 		memory.blockedDoorUntil[tile] = memory.ticks + DOOR_BLOCK_TICS;
 		memory.doorAttempts[tile] = 0;
 		memory.doorLastUse[tile] = 0;
 		memory.doorWaitSince[tile] = 0;
 		memory.stuck = 0;
-		Printf("Autoplayer: door (%d,%d) did not open; trying another route.\n",
+		Printf("Autoplayer: obstruction (%d,%d) did not open; replanning.\n",
 			tile % static_cast<int>(memory.width),
 			tile / static_cast<int>(memory.width));
 	}
@@ -194,7 +233,7 @@ namespace
 		int walk, int use, int priority)
 	{
 		if(walk < 0 || static_cast<unsigned int>(walk) >= dist.size() ||
-			dist[walk] < 0)
+			dist[walk] == INT_MAX)
 			return;
 		if(priority < best.priority ||
 			(priority == best.priority && dist[walk] < best.distance))
@@ -246,30 +285,37 @@ namespace
 		if(memory.visited[start] < 255)
 			++memory.visited[start];
 
-		std::vector<int> distance(total, -1);
+		// Replan against dynamic geometry and remembered lethal corridors.
+		std::vector<int> distance(total, INT_MAX);
 		std::vector<int> parent(total, -1);
-		std::queue<int> frontier;
+		typedef std::pair<int, int> Node;
+		std::priority_queue<Node, std::vector<Node>, std::greater<Node> > frontier;
 		distance[start] = 0;
-		frontier.push(start);
-
+		frontier.push(Node(0, start));
 		while(!frontier.empty())
 		{
-			int at = frontier.front();
+			const Node node = frontier.top();
 			frontier.pop();
-			int x = at % w;
-			int y = at / w;
-			for(int dir = 0; dir != 4; ++dir)
+			const int at = node.second;
+			if(node.first != distance[at])
+				continue;
+			const int x = at % w;
+			const int y = at / w;
+			for(int dir = 0; dir < 4; ++dir)
 			{
 				const int nx = x + DIRX[dir];
 				const int ny = y + DIRY[dir];
 				if(!Inside(nx, ny) || !CanEnter(nx, ny, x, y, pawn))
 					continue;
 				const int next = Index(nx, ny);
-				if(distance[next] >= 0)
+				MapSpot nextSpot = map->GetSpot(nx, ny, 0);
+				const int stepCost = AutobotPolicy::TravelCost(
+					nextSpot->tile != NULL, memory.deathDanger[next]);
+				if(distance[at] + stepCost >= distance[next])
 					continue;
-				distance[next] = distance[at] + 1;
+				distance[next] = distance[at] + stepCost;
 				parent[next] = at;
-				frontier.push(next);
+				frontier.push(Node(distance[next], next));
 			}
 		}
 
@@ -292,9 +338,9 @@ namespace
 				pawn->player->ReadyWeapon->ammo[0] &&
 				pawn->player->ReadyWeapon->ammo[0]->amount < 8;
 			const int priority = key ? 0 :
-				(healing && pawn->health < 65) || (ammunition && lowAmmo) ? 1 : 3;
+				(healing && pawn->health < 65) || (ammunition && lowAmmo) ? 1 : 5;
 			if(key || (healing && pawn->health < pawn->maxhealth) ||
-				(ammunition && distance[tile] >= 0 && distance[tile] <= 7))
+				(ammunition && distance[tile] != INT_MAX && distance[tile] <= 70))
 				Consider(best, distance, tile, -1, priority);
 		}
 
@@ -310,10 +356,12 @@ namespace
 					continue;
 				const bool exit = ExitSpecial(trigger.action);
 				if(!exit && (!trigger.playerUse ||
-					memory.usedSwitch[tile] || DoorSpecial(trigger.action)))
+					memory.usedSwitch[tile] || InteractiveSpecial(trigger.action)))
 					continue;
 
-				const int priority = exit ? 2 : 4;
+				if(exit && memory.exitRetryAfter[tile] > memory.ticks)
+					continue;
+				const int priority = exit ? 2 : 3;
 				if(trigger.playerCross && !spot->tile)
 					Consider(best, distance, tile, -1, priority);
 				if(trigger.playerUse)
@@ -332,13 +380,31 @@ namespace
 			}
 		}
 
+		// Hunt reachable hostiles before giving up on boss-gated objectives.
+		for(AActor::Iterator actor = AActor::GetIterator().Next(); actor; actor.Next())
+		{
+			if(actor->player || !(actor->flags & FL_ISMONSTER) ||
+				!(actor->flags & FL_SHOOTABLE) || actor->health <= 0 ||
+				!Inside(actor->tilex, actor->tiley))
+				continue;
+			const int monster = Index(actor->tilex, actor->tiley);
+			Consider(best, distance, monster, -1, 4);
+			for(int dir = 0; dir < 4; ++dir)
+			{
+				const int nx = actor->tilex + DIRX[dir];
+				const int ny = actor->tiley + DIRY[dir];
+				if(Inside(nx, ny))
+					Consider(best, distance, Index(nx, ny), -1, 4);
+			}
+		}
+
 		if(best.walk == -1)
 		{
 			for(int i = 0; i < total; ++i)
 			{
-				if(distance[i] < 0 || memory.visited[i] != 0)
+				if(distance[i] == INT_MAX || memory.visited[i] != 0)
 					continue;
-				Consider(best, distance, i, -1, 5);
+				Consider(best, distance, i, -1, 6);
 			}
 		}
 
@@ -362,6 +428,9 @@ namespace
 			next = parent[next];
 
 
+		if(best.walk == start && best.use < 0 && best.priority == 2)
+			memory.exitRetryAfter[start] = memory.ticks + 70 * 8;
+
 		if(best.walk == start && best.use >= 0)
 		{
 			const int ux = best.use % w;
@@ -375,7 +444,7 @@ namespace
 				const MapTrigger &trig = useSpot->triggers[t];
 				if(!trig.playerUse || (!trig.active && !trig.repeatable) ||
 					(!ExitSpecial(trig.action) &&
-						(memory.usedSwitch[best.use] || DoorSpecial(trig.action))))
+						(memory.usedSwitch[best.use] || InteractiveSpecial(trig.action))))
 					continue;
 				canUse = true;
 				if(ExitSpecial(trig.action)) isExit = true;
@@ -393,6 +462,8 @@ namespace
 				cmd.buttonstate[bt_use] = true;
 				if(!isExit)
 					memory.usedSwitch[best.use] = 1;
+				else
+					memory.exitRetryAfter[best.use] = memory.ticks + 70 * 8;
 			}
 			return;
 		}
@@ -403,6 +474,7 @@ namespace
 		const fixed y = (ty << TILESHIFT) + FRACUNIT / 2;
 		if(!TurnToward(pawn, cmd, x, y, 14))
 			return;
+		memory.waypoint = next;
 
 
 		MapSpot spot = map->GetSpot(tx, ty, 0);
@@ -418,7 +490,7 @@ namespace
 					if(!memory.doorWaitSince[next])
 						memory.doorWaitSince[next] = memory.ticks;
 					if(memory.ticks - memory.doorWaitSince[next] > DOOR_OPEN_TIMEOUT)
-						BlockDoor(next);
+						BlockInteractive(next);
 					return;
 				}
 				memory.doorWaitSince[next] = 0;
@@ -427,7 +499,7 @@ namespace
 					return;
 				if(memory.doorAttempts[next] >= DOOR_MAX_ATTEMPTS)
 				{
-					BlockDoor(next);
+					BlockInteractive(next);
 					return;
 				}
 				cmd.buttonstate[bt_use] = true;
