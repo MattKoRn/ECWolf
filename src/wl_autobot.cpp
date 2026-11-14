@@ -359,9 +359,32 @@ namespace
 		AutobotPolicy::ComputeRoutes(w, h, start, BotRouteCost(pawn, w),
 			distance, parent);
 
+		// Inspect outstanding prerequisites before considering exits. Map
+		// scripts can hide boss gates, so repeat exit failures lower their
+		// priority until keys, switches or live monsters have been considered.
+		bool missingKey = false;
+		bool pendingSwitch = false;
+		for(int y = 0; y < h; ++y)
+		for(int x = 0; x < w; ++x)
+		{
+			const int cell = Index(x, y);
+			MapSpot spot = map->GetSpot(x, y, 0);
+			for(unsigned int t = 0; t < spot->triggers.Size(); ++t)
+			{
+				const MapTrigger &trigger = spot->triggers[t];
+				if(!trigger.active && !trigger.repeatable) continue;
+				if(DoorSpecial(trigger.action) && trigger.arg[3] &&
+					!P_CheckKeys(pawn, trigger.arg[3], true))
+					missingKey = true;
+				if(trigger.playerUse && !ExitSpecial(trigger.action) &&
+					!InteractiveSpecial(trigger.action) && !memory.usedSwitch[cell])
+					pendingSwitch = true;
+			}
+		}
+
 		Goal best;
-		// 0 = key, 1 = urgent pickups, 2 = exit, 3 = supplies,
-		// 4 = switches, 5 = unexplored tiles.
+		// 0: keys; 1: survival; 2: exit; 3: switches; 4: hostiles;
+		// 5: stalled exit; 6: supplies; 7: frontier exploration.
 		for(AActor::Iterator actor = AActor::GetIterator().Next(); actor; actor.Next())
 		{
 			if(!(actor->flags & FL_PICKUP) || actor->player ||
@@ -377,8 +400,14 @@ namespace
 			const bool lowAmmo = pawn->player->ReadyWeapon &&
 				pawn->player->ReadyWeapon->ammo[0] &&
 				pawn->player->ReadyWeapon->ammo[0]->amount < 8;
-			const int priority = key ? 0 :
-				(healing && pawn->health < 65) || (ammunition && lowAmmo) ? 1 : 5;
+			const int priority = key ?
+				AutobotPolicy::ObjectivePriority(AutobotPolicy::KeyObjective,
+					0, missingKey, pendingSwitch, memory.liveEnemies != 0) :
+				((healing && pawn->health < 65) || (ammunition && lowAmmo)) ?
+				AutobotPolicy::ObjectivePriority(AutobotPolicy::UrgentObjective,
+					0, missingKey, pendingSwitch, memory.liveEnemies != 0) :
+				AutobotPolicy::ObjectivePriority(AutobotPolicy::SupplyObjective,
+					0, missingKey, pendingSwitch, memory.liveEnemies != 0);
 			if(key || (healing && pawn->health < pawn->maxhealth) ||
 				(ammunition && distance[tile] != INT_MAX && distance[tile] <= 70))
 				Consider(best, distance, tile, -1, priority);
@@ -401,7 +430,10 @@ namespace
 
 				if(exit && memory.exitRetryAfter[tile] > memory.ticks)
 					continue;
-				const int priority = exit ? 2 : 3;
+				const int priority = AutobotPolicy::ObjectivePriority(
+					exit ? AutobotPolicy::ExitObjective : AutobotPolicy::SwitchObjective,
+					memory.exitAttempts[tile], missingKey,
+					pendingSwitch, memory.liveEnemies != 0);
 				if(trigger.playerCross && !spot->tile)
 					Consider(best, distance, tile, -1, priority);
 				if(trigger.playerUse)
@@ -428,13 +460,17 @@ namespace
 				!Inside(actor->tilex, actor->tiley))
 				continue;
 			const int monster = Index(actor->tilex, actor->tiley);
-			Consider(best, distance, monster, -1, 4);
+			Consider(best, distance, monster, -1,
+				AutobotPolicy::ObjectivePriority(AutobotPolicy::EnemyObjective,
+					0, missingKey, pendingSwitch, memory.liveEnemies != 0));
 			for(int dir = 0; dir < 4; ++dir)
 			{
 				const int nx = actor->tilex + DIRX[dir];
 				const int ny = actor->tiley + DIRY[dir];
 				if(Inside(nx, ny) && Index(nx, ny) != start)
-					Consider(best, distance, Index(nx, ny), -1, 4);
+					Consider(best, distance, Index(nx, ny), -1,
+						AutobotPolicy::ObjectivePriority(AutobotPolicy::EnemyObjective,
+							0, missingKey, pendingSwitch, memory.liveEnemies != 0));
 			}
 		}
 
@@ -444,32 +480,55 @@ namespace
 			{
 				if(distance[i] == INT_MAX || memory.visited[i] != 0)
 					continue;
-				Consider(best, distance, i, -1, 6);
+				Consider(best, distance, i, -1,
+					AutobotPolicy::ObjectivePriority(AutobotPolicy::ExploreObjective,
+						0, missingKey, pendingSwitch, memory.liveEnemies != 0));
 			}
 		}
 
 		if(best.walk == -1)
 		{
 			++memory.noGoalTicks;
+			if(memory.noGoalTicks % (70 * 30) == 0)
+			{
+				++failures.noGoals;
+				LogEvent("failure", "no_reachable_goal", pawn->tilex, pawn->tiley);
+			}
 			// Once all reachable alternatives and blocked-door retries fail,
 			// avoid an infinite idle loop even when no checkpoint was loaded.
 			if(memory.noGoalTicks > 70 * 180)
 			{
 				Printf("Autoplayer: emergency level advance (%s).\n",
 					gamestate.mapname);
+				LogEvent("emergency_advance", "no_reachable_goal");
 				playstate = ex_completed;
 			}
 			return;
 		}
 		memory.noGoalTicks = 0;
-
+		if((memory.lastGoalTile != best.walk ||
+			memory.lastGoalPriority != best.priority) &&
+			(memory.ticks - memory.lastGoalLogTick >= 70))
+		{
+			LogEvent("goal", "new_objective",
+				best.walk % w, best.walk / w);
+			memory.lastGoalTile = best.walk;
+			memory.lastGoalPriority = best.priority;
+			memory.lastGoalLogTick = memory.ticks;
+		}
 		int next = best.walk;
 		while(parent[next] != -1 && parent[next] != start)
 			next = parent[next];
 
 
-		if(best.walk == start && best.use < 0 && best.priority == 2)
+		if(best.walk == start && best.use < 0 &&
+			(best.priority == 2 || best.priority == 5))
+		{
 			memory.exitRetryAfter[start] = memory.ticks + 70 * 8;
+			++memory.exitAttempts[start];
+			++failures.failedExits;
+			LogEvent("exit_retry", "cross_exit_wait", pawn->tilex, pawn->tiley);
+		}
 
 		if(best.walk == start && best.use >= 0)
 		{
@@ -501,9 +560,17 @@ namespace
 			{
 				cmd.buttonstate[bt_use] = true;
 				if(!isExit)
+				{
 					memory.usedSwitch[best.use] = 1;
+					LogEvent("switch_use", "interact", ux, uy);
+				}
 				else
+				{
 					memory.exitRetryAfter[best.use] = memory.ticks + 70 * 8;
+					++memory.exitAttempts[best.use];
+					++failures.failedExits;
+					LogEvent("exit_retry", "use_exit_wait", ux, uy);
+				}
 			}
 			return;
 		}
