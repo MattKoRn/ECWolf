@@ -14,11 +14,8 @@ void Bot_Update(TicCmd_t &cmd);
 void Bot_NewGame(const FString &startMap, int difficulty);
 bool Bot_AdvanceEpisode();
 
-// Save at the PlayLoop frame boundary; request a reload there, but only
-// load after PlayLoop exits (from GameLoop). Never replace actors mid-frame.
-void Bot_SaveCheckpoint();
-bool Bot_WantsReload();
+// Recover from bot death via ECWolf's existing level respawn path.
+// No snapshot deserialization is performed during unattended gameplay.
 bool Bot_ResumeAfterDeath();
-bool Bot_ReloadCheckpoint();
 
 #endif
