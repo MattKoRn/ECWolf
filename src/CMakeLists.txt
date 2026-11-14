@@ -132,6 +132,7 @@ initial_sources(
 	wl_act2.cpp
 	wl_agent.cpp
 	wl_autobot.cpp
+	wl_rpg.cpp
 	wl_atmos.cpp
 	wl_cloudsky.cpp
 	wl_debug.cpp
