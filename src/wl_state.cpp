@@ -10,6 +10,7 @@
 #include "thingdef/thingdef.h"
 #include "wl_agent.h"
 #include "wl_game.h"
+#include "wl_rpg.h"
 #include "wl_net.h"
 #include "wl_play.h"
 #include "wl_state.h"
@@ -780,7 +781,8 @@ void DamageActor (AActor *ob, AActor *attacker, unsigned damage)
 	// do double damage if shooting a non attack mode actor
 	//
 	if ( !(ob->flags & FL_ATTACKMODE) )
-		damage <<= 1;
+		damage = damage > 100000000 ? 100000000 : damage * 2;
+	damage = RPG::OutgoingDamage(damage, attacker);
 
 	NetDPrintf("%s %d points\n", __FUNCTION__, FixedMul(damage, gamestate.difficulty->PlayerDamageFactor));
 	ob->health -= FixedMul(damage, gamestate.difficulty->PlayerDamageFactor);
