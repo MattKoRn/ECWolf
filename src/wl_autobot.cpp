@@ -56,7 +56,7 @@ namespace
 			usedEmergencyNoclip(false), originalNoclip(false),
 			emergencyUntil(0), noGoalTicks(0), detours(0),
 			failedRecoveryTicks(0), waypoint(-1), liveEnemies(0),
-			lastWeaponTick(0), lastGoalTile(-1), lastGoalPriority(-1),
+			lastWeaponTick(0), meleeAttackTics(0), lastGoalTile(-1), lastGoalPriority(-1),
 			lastGoalLogTick(0)
 		{
 			mapName[0] = '\0';
@@ -84,7 +84,7 @@ namespace
 		unsigned int noGoalTicks;
 		unsigned int detours, failedRecoveryTicks;
 		int waypoint;
-		unsigned int liveEnemies, lastWeaponTick;
+		unsigned int liveEnemies, lastWeaponTick, meleeAttackTics;
 		int lastGoalTile, lastGoalPriority;
 		unsigned int lastGoalLogTick;
 		char mapName[9];
@@ -400,25 +400,61 @@ namespace
 		// 5: stalled exit; 6: supplies; 7: frontier exploration.
 		for(AActor::Iterator actor = AActor::GetIterator().Next(); actor; actor.Next())
 		{
-			if(!(actor->flags & FL_PICKUP) || actor->player ||
+			// FL_PICKUP is a *toucher* capability, not a reliable pickup
+			// classification. Inspect actual world inventory instances so
+			// dropped guard ammo is not inadvertently filtered out.
+			if(actor->player || !actor->IsKindOf(NATIVE_CLASS(Inventory)) ||
 				!Inside(actor->tilex, actor->tiley))
+				continue;
+			const AInventory *item = static_cast<const AInventory *>(actor);
+			if(item->owner || (item->itemFlags & IF_INACTIVE))
 				continue;
 
 			const int tile = Index(actor->tilex, actor->tiley);
 			const ClassDef *cls = actor->GetClass();
 			const bool key = cls->IsDescendantOf(NATIVE_CLASS(Key));
 			const bool healing = cls->IsDescendantOf(NATIVE_CLASS(Health));
-			const bool ammunition = cls->IsDescendantOf(NATIVE_CLASS(Ammo)) ||
-				cls->IsDescendantOf(NATIVE_CLASS(Weapon));
+			const bool ammoItem = cls->IsDescendantOf(NATIVE_CLASS(Ammo));
+			const bool weaponItem = cls->IsDescendantOf(NATIVE_CLASS(Weapon));
+			const bool ammunition = ammoItem || weaponItem;
+			bool collectibleAmmo = false;
+			if(ammoItem)
+			{
+				const AAmmo *groundAmmo = static_cast<const AAmmo *>(actor);
+				const AAmmo *heldAmmo = static_cast<const AAmmo *>(
+					pawn->FindInventory(groundAmmo->GetAmmoType()));
+				collectibleAmmo = !heldAmmo || heldAmmo->amount < heldAmmo->maxamount;
+			}
+			else if(weaponItem)
+			{
+				// Enemy-dropped weapons can also replenish their ammo; avoid
+				// circling a weapon when it is owned and all ammo is full.
+				const AWeapon *groundWeapon = static_cast<const AWeapon *>(actor);
+				collectibleAmmo = !pawn->FindInventory(cls);
+				for(unsigned int slot = 0; slot < 2; ++slot)
+				{
+					if(!groundWeapon->ammotype[slot] ||
+						groundWeapon->ammogive[slot] <= 0)
+						continue;
+					const AAmmo *heldAmmo = static_cast<const AAmmo *>(
+						pawn->FindInventory(groundWeapon->ammotype[slot]));
+					if(!heldAmmo || heldAmmo->amount < heldAmmo->maxamount)
+						collectibleAmmo = true;
+				}
+			}
+			if(ammunition && !collectibleAmmo)
+				continue;
+
 			const AWeapon *ready = pawn->player->ReadyWeapon;
 			const unsigned int ammo = ready && ready->ammo[0] ?
 				static_cast<unsigned int>(ready->ammo[0]->amount) : 0;
-			const unsigned int localThreat =
-				memory.threat[start];
+			const unsigned int localThreat = memory.threat[start];
 			const int urgency = AutobotPolicy::SupplyPriority(healing,
 				ammunition, pawn->health, pawn->maxhealth, ammo,
 				localThreat, failures.deaths);
-			const int priority = key ?
+			const bool droppedAmmo = ammunition &&
+				!!(item->itemFlags & IF_DROPPED);
+			const int regularPriority = key ?
 				AutobotPolicy::ObjectivePriority(AutobotPolicy::KeyObjective,
 					0, missingKey, pendingSwitch, memory.liveEnemies != 0) :
 				urgency == 1 ?
@@ -426,9 +462,11 @@ namespace
 					0, missingKey, pendingSwitch, memory.liveEnemies != 0) :
 				AutobotPolicy::ObjectivePriority(AutobotPolicy::SupplyObjective,
 					0, missingKey, pendingSwitch, memory.liveEnemies != 0);
+			const int priority = AutobotPolicy::AmmoDropPriority(
+				droppedAmmo, collectibleAmmo, regularPriority);
 			if(key || (healing && pawn->health < pawn->maxhealth) ||
-				(ammunition && (priority == 1 || (distance[tile] != INT_MAX &&
-					distance[tile] <= 180))))
+				(ammunition && (droppedAmmo || priority == 1 ||
+					(distance[tile] != INT_MAX && distance[tile] <= 180))))
 				Consider(best, distance, tile, -1, priority);
 		}
 
@@ -739,7 +777,10 @@ namespace
 			target = actor;
 		}
 		if(!target)
+		{
+			memory.meleeAttackTics = 0;
 			return;
+		}
 
 		hasTarget = true;
 		memory.waypoint = -1;
@@ -749,6 +790,7 @@ namespace
 			LogEvent("combat", "visible_hostile", target->tilex, target->tiley);
 		if(SelectCombatWeapon(pawn, cmd, distanceTiles))
 		{
+			memory.meleeAttackTics = 0;
 			cmd.controly = distanceTiles < 2.0 ? 30 : 0;
 			return;
 		}
@@ -771,20 +813,31 @@ namespace
 			weapon->ammouse[AWeapon::PrimaryFire]);
 		if(melee)
 		{
-			// Never use the ranged-weapon retreat behavior for knife/punch
-			// attacks. Approach into dependable hit range, keep facing the
-			// enemy, then attack while closing the final gap.
+			// A_CustomPunch hits several animation tics after the attack
+			// begins and only within a narrow facing cone. Close in first,
+			// keep tracking the target, then pulse immediately on alignment.
+			// A 3-tic press and 12-tic release gives NOAUTOFIRE knives a
+			// reliable fresh button edge even if the weapon was not ready.
 			if(!aimed)
-				return;
-			cmd.controly = AutobotPolicy::MeleeApproachSpeed(distanceTiles);
-			if(AutobotPolicy::ShouldShoot(distanceTiles, true))
 			{
-				const bool semiAuto = !!(weapon->weaponFlags & WF_NOAUTOFIRE);
-				cmd.buttonstate[bt_attack] = !semiAuto ||
-					(memory.ticks % 16 == 0);
+				memory.meleeAttackTics = 0;
+				return;
 			}
+			cmd.controly = AutobotPolicy::MeleeApproachSpeed(distanceTiles);
+			if(!AutobotPolicy::ShouldShoot(distanceTiles, true))
+			{
+				memory.meleeAttackTics = 0;
+				return;
+			}
+			const bool semiAuto = !!(weapon->weaponFlags & WF_NOAUTOFIRE);
+			cmd.buttonstate[bt_attack] = !semiAuto ||
+				AutobotPolicy::MeleeAttackInput(memory.meleeAttackTics, aimed, true);
+			if(cmd.buttonstate[bt_attack] && memory.meleeAttackTics % 15 == 0)
+				LogEvent("melee_attack", "knife_swing", target->tilex, target->tiley);
+			++memory.meleeAttackTics;
 			return;
 		}
+		memory.meleeAttackTics = 0;
 		if(!AutobotPolicy::ShouldShoot(distanceTiles, false))
 		{
 			if(aimed)
