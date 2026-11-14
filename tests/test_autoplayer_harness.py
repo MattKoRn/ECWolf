@@ -97,9 +97,9 @@ class HarnessTests(unittest.TestCase):
     def test_completion_event_requires_a_real_map_start(self):
         stub = self.root / "false_success.py"
         stub.write_text(
-            "import pathlib, sys\\n"
-            "log = pathlib.Path(sys.argv[sys.argv.index('--autoplay-log')+1])\\n"
-            "log.write_text('event=campaign_complete\\\\n')\\n",
+            "import pathlib, sys\n"
+            "log = pathlib.Path(sys.argv[sys.argv.index('--autoplay-log')+1])\n"
+            "log.write_text('event=campaign_complete\\n')\n",
             encoding="utf-8")
         result = HARNESS.run_campaign(stub, "wolf3d", self.wolf,
                                       self.root / "false-report", 3, "MAP01", 0.02)
