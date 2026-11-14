@@ -1242,6 +1242,15 @@ ACTION_FUNCTION(A_CustomPunch)
 	if(!norandom)
 		damage *= pr_cwpunch()%8 + 1;
 
+	// Knife and Knife2 normally roll 0-15 damage, so an otherwise valid
+	// hit can silently cause zero damage. During unattended auto-play only,
+	// give a registered knife hit a minimum of one point of base damage.
+	const ClassDef *knifeClass = ClassDef::FindClass("Knife");
+	const bool autoKnife = BotEnabled &&
+		Net::InitVars.mode == Net::MODE_SinglePlayer &&
+		knifeClass && player->ReadyWeapon->IsKindOf(knifeClass);
+	damage = AutobotPolicy::AutoPlayKnifeDamage(damage, autoKnife);
+
 	// hit something
 	if(!(flags & CPF_ALWAYSPLAYSOUND))
 		PlaySoundLocActor(player->ReadyWeapon->attacksound, self, self == players[ConsolePlayer].camera ? SD_WEAPONS : SD_GENERIC);
