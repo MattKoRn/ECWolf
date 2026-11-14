@@ -21,6 +21,7 @@
 #include "wl_play.h"
 #include "wl_loadsave.h"
 #include "id_in.h"
+#include "id_ca.h"
 #include "actor.h"
 #include "gamemap.h"
 #include "g_mapinfo.h"
@@ -49,7 +50,10 @@ namespace
 		BotState() : seenMap(NULL), width(0), height(0), ticks(0),
 			stuck(0), lastPositionTick(0), lastX(0), lastY(0),
 			usedEmergencyNoclip(false), originalNoclip(false),
-			emergencyUntil(0), nextSave(35), noGoalTicks(0) {}
+			emergencyUntil(0), nextSave(35), noGoalTicks(0)
+		{
+			mapName[0] = '\0';
+		}
 
 		const GameMap *seenMap;
 		unsigned int width, height;
@@ -63,6 +67,7 @@ namespace
 		unsigned int emergencyUntil;
 		unsigned int nextSave;
 		unsigned int noGoalTicks;
+		char mapName[9];
 	} memory;
 
 	struct Goal
@@ -105,13 +110,16 @@ namespace
 	{
 		const GameMap::Header &header = map->GetHeader();
 		if(memory.seenMap == map && memory.width == header.width &&
-			memory.height == header.height)
+			memory.height == header.height &&
+			std::strncmp(memory.mapName, gamestate.mapname, 9) == 0)
 			return;
 
 		if(memory.usedEmergencyNoclip)
 			noclip = memory.originalNoclip;
 		memory = BotState();
 		memory.seenMap = map;
+		std::strncpy(memory.mapName, gamestate.mapname, 9);
+		memory.mapName[8] = '\0';
 		memory.width = header.width;
 		memory.height = header.height;
 		memory.visited.resize(header.width * header.height, 0);
@@ -439,7 +447,12 @@ namespace
 			memory.stuck = 0;
 		}
 
-		if(memory.stuck > 280 && reloadCount < 2 && checkpointValid &&
+		if(memory.stuck > 70 * 180 && reloadCount >= 2)
+		{
+			Printf("Autoplayer: emergency advance after repeated obstruction.\n");
+			playstate = ex_completed;
+		}
+		else if(memory.stuck > 280 && reloadCount < 2 && checkpointValid &&
 			!reloadRequested)
 		{
 			reloadRequested = true;
@@ -511,6 +524,11 @@ void Bot_Update(TicCmd_t &cmd)
 	}
 	wasF12 = f12;
 
+	if(!BotEnabled && memory.usedEmergencyNoclip)
+	{
+		noclip = memory.originalNoclip;
+		memory.usedEmergencyNoclip = false;
+	}
 	if(!BotEnabled || !map || Net::InitVars.mode != Net::MODE_SinglePlayer ||
 		demoplayback || demorecord || Paused ||
 		players[ConsolePlayer].state != player_t::PST_LIVE ||
