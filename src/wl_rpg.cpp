@@ -350,6 +350,9 @@ unsigned int BoundDamage(double value) {
 }
 
 namespace RPG {
+// Tick() uses regeneration before its helper is defined below.
+static int RegenPerSecond(int maxHealth);
+
 void Initialize() {
     if(ready) return;
     // The unattended dual-campaign harness sets a distinct profile folder
