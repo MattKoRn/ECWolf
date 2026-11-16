@@ -22,7 +22,7 @@ No administrator rights are needed. This is a PowerShell-script installer, not
 a signed MSI/EXE installer.
 
 The packager and installer use an explicit allowlist for the engine executable,
-its DLLs, ecwolf resource PK3s, license notice and launcher. Wolfenstein 3D,
+its DLLs, the official ecwolf.pk3 resource, license notice and launcher. Wolfenstein 3D,
 Spear of Destiny, other commercial game data, private saves, configs, RPG
 profiles and custom mods are excluded. Upgrades do not delete existing files.
 

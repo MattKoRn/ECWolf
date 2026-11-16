@@ -10,7 +10,7 @@ try {
     New-Item -ItemType Directory -Path $fake -Force | Out-Null
     foreach ($name in @('ecwolf.exe','ecwolf.pk3','SDL2.dll',
                           'GAMEMAPS.WL6','MAPHEAD.WL6','VSWAP.WL6',
-                          'user.cfg','profile.rpg','private-mod.pk3')) {
+                          'user.cfg','profile.rpg','private-mod.pk3','ecwolf-user-mod.pk3')) {
         Set-Content -LiteralPath (Join-Path $fake $name) -Value 'synthetic test data'
     }
     & (Join-Path $repo 'tools\package-windows.ps1') -InstallRoot $fake -OutputDirectory $out -SkipShortcut
@@ -24,7 +24,7 @@ try {
         }
     }
     foreach ($private in @('GAMEMAPS.WL6','MAPHEAD.WL6','VSWAP.WL6',
-                           'user.cfg','profile.rpg','private-mod.pk3')) {
+                           'user.cfg','profile.rpg','private-mod.pk3','ecwolf-user-mod.pk3')) {
         if (Test-Path -LiteralPath (Join-Path $stage $private)) {
             throw "Private/licensed file leaked into release: $private"
         }

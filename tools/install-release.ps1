@@ -15,7 +15,7 @@ if ([IO.Path]::GetFullPath($PSScriptRoot).TrimEnd('\') -ieq [IO.Path]::GetFullPa
 New-Item -ItemType Directory -Path $InstallRoot -Force | Out-Null
 foreach ($item in @(Get-ChildItem -LiteralPath $PSScriptRoot -File)) {
     if ($item.Name -eq 'ecwolf.exe' -or $item.Extension.ToLowerInvariant() -eq '.dll' -or
-        $item.Name -like 'ecwolf*.pk3' -or $item.Name -eq 'licenses.txt') {
+        $item.Name -like 'ecwolf.pk3' -or $item.Name -eq 'licenses.txt') {
         Copy-Item -LiteralPath $item.FullName -Destination $InstallRoot -Force
     }
 }

@@ -7,7 +7,7 @@ $repo=Split-Path -Parent $PSScriptRoot
 if (-not $OutputDirectory) { $OutputDirectory=Join-Path $repo 'build\windows-release' }
 $exe=Join-Path $InstallRoot 'ecwolf.exe'
 if (-not (Test-Path -LiteralPath $exe -PathType Leaf)) { throw "Missing $exe" }
-if (@(Get-ChildItem -LiteralPath $InstallRoot -File -Filter 'ecwolf*.pk3').Count -eq 0) {
+if (@(Get-ChildItem -LiteralPath $InstallRoot -File -Filter 'ecwolf.pk3').Count -eq 0) {
     throw 'Built ECWolf engine resource PK3 was not found.'
 }
 $installedLauncher=Join-Path $InstallRoot 'launcher'
@@ -21,7 +21,7 @@ if (Test-Path -LiteralPath $stage) { Remove-Item -LiteralPath $stage -Recurse -F
 New-Item -ItemType Directory -Path $stage -Force | Out-Null
 foreach ($item in @(Get-ChildItem -LiteralPath $InstallRoot -File)) {
     if ($item.Name -eq 'ecwolf.exe' -or $item.Extension.ToLowerInvariant() -eq '.dll' -or
-        $item.Name -like 'ecwolf*.pk3' -or $item.Name -eq 'licenses.txt') {
+        $item.Name -like 'ecwolf.pk3' -or $item.Name -eq 'licenses.txt') {
         Copy-Item -LiteralPath $item.FullName -Destination $stage
     }
 }
