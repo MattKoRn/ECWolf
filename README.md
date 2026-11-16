@@ -40,3 +40,13 @@ adaptive enemies and an in-game Auto Assign button is available in this fork.
 See [RPG.md](RPG.md) for details. On Windows, run
 `BUILD-AND-INSTALL-RPG.bat` from a Git checkout with submodules to build,
 install and create an **ECWolf RPG** desktop shortcut.
+
+
+## Windows visual launcher and portable release
+
+Double-click BUILD-AND-INSTALL-ECWOLF.bat from a Windows Git checkout with
+CMake and Visual Studio build tools to build/test/install ECWolf, create an
+ECWolf Launcher desktop shortcut and generate a portable ZIP. This edition
+adds local mod selection, game-data validation, visual resolution presets and
+optional Autoplayer startup. No proprietary game data is included in the ZIP.
+See [WINDOWS-RELEASE.md](WINDOWS-RELEASE.md) for requirements and limitations.

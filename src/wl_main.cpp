@@ -965,6 +965,8 @@ static const char* CheckParameters(int argc, char *argv[], TArray<FString> &file
 		}
 		else IFARG("--fullscreen")
 			fullscreen = true;
+		else IFARG("--windowed")
+			fullscreen = false;
 		else IFARG("--res")
 		{
 			if(i + 2 >= argc)
@@ -1176,6 +1178,7 @@ static const char* CheckParameters(int argc, char *argv[], TArray<FString> &file
 			" --autoplay             Enables the existing F12 bot at startup\n"
 			" --autoplay-log <path>  Writes detailed bot events to a log file\n"
 			" --fullscreen           Starts the game in fullscreen mode\n"
+			" --windowed             Starts the game in a window\n"
 			" --res <width> <height> Sets the screen resolution\n"
 			" --aspect <aspect>      Sets the aspect ratio.\n"
 			" --noadaptive           Disables adaptive tics.\n"

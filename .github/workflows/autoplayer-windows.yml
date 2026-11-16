@@ -53,6 +53,20 @@ jobs:
             throw "ECWolf executable was not installed"
           }
           Write-Host "Windows build and packaging smoke check passed."
+      - name: Windows release packaging regression tests
+        shell: pwsh
+        run: ./tests/test-windows-release.ps1
+      - name: Package distributable portable ZIP
+        shell: pwsh
+        run: |
+          ./tools/package-windows.ps1 -InstallRoot "$PWD/dist" -OutputDirectory "$PWD/build/windows-release" -SkipShortcut
+          ./build/windows-release/ECWolf-Windows-x64/launcher/ecwolf-launcher.ps1 -SmokeCheck
+      - name: Upload Windows portable ZIP
+        uses: actions/upload-artifact@v4
+        with:
+          name: ecwolf-windows-x64-portable
+          path: build/windows-release/ECWolf-Windows-x64-Portable.zip
+          if-no-files-found: error
       - name: Upload Windows engine
         uses: actions/upload-artifact@v4
         with:

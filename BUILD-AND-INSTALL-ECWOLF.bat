@@ -8,5 +8,5 @@ if errorlevel 1 (
   exit /b 1
 )
 echo.
-echo ECWolf RPG + Autoplayer installed and desktop shortcut created.
+echo ECWolf installed. Launcher shortcut and portable ZIP created.
 pause

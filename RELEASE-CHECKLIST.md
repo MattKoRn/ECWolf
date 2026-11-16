@@ -46,3 +46,13 @@ passed certification or that commercial distribution rights have been obtained.
       game-data uploads by default.
 - [ ] Test Windows SmartScreen/signing, installer rollback and permissions,
       and a fresh-install workflow before public distribution.
+
+## Windows launcher / ZIP sign-off
+- [ ] Run tests/test-windows-release.ps1 and verify no user game data, saves,
+      config files or private mod PK3s are packaged.
+- [ ] Validate the one-click extracted ZIP installer, in-place upgrade and
+      ECWolf Launcher desktop shortcut on clean Windows 10/11 x64.
+- [ ] Test paths containing spaces, multiple mods, data choices, 1080p/720p
+      widescreen, 480p classic, fullscreen and windowed mode.
+- [ ] Confirm Windows Actions finishes successfully and the ZIP plays
+      real licensed data. CI smoke tests do not replace manual playthroughs.
