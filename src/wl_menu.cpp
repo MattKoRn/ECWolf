@@ -75,6 +75,7 @@ MENU_LISTENER(RPGSmartSpend)
 MENU_LISTENER(RPGHudToggle)
 {
 	RPG::ToggleHud();
+	RPG::ShowProfile();
 	return true;
 }
 MENU_LISTENER(BotCheatToggle)

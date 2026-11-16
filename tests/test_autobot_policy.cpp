@@ -202,4 +202,13 @@ int main()
 	assert(distributed == 5);
 	assert(std::string(RPGLootPolicy::RarityName(4)) == "Legendary");
 	assert(std::string(RPGLootPolicy::AffixName(1, 1)) == "Restorative");
+	assert(std::string(RPGLootPolicy::ShortRarityName(0)) == "");
+	assert(std::string(RPGLootPolicy::ShortRarityName(4)) == "L");
+	assert(RPGLootPolicy::FormatRelic(RPGLootPolicy::Weapon, 0, 0, 0) == "None");
+	assert(RPGLootPolicy::FormatRelic(RPGLootPolicy::Weapon, 2, 1, 12) == "Rare Keen +12");
+	assert(RPGLootPolicy::FormatRelic(RPGLootPolicy::Armor, 3, 1, 15) == "Epic Restorative +15");
+	assert(IsLowHealthPercent(44, 100, 45));
+	assert(!IsLowHealthPercent(45, 100, 45));
+	assert(IsLowHealthPercent(40000000, 90000000, 50));
+	assert(!IsLowHealthPercent(50000000, 90000000, 50));
 }

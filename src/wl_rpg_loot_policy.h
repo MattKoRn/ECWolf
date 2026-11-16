@@ -1,6 +1,8 @@
 #ifndef ECWOLF_WL_RPG_LOOT_POLICY_H
 #define ECWOLF_WL_RPG_LOOT_POLICY_H
 #include <algorithm>
+#include <sstream>
+#include <string>
 
 // Pure helpers: RPG equipment is account-wide, auto-collected from monster
 // loot rolls, and never replaces the engine's weapon or inventory objects.
@@ -34,6 +36,16 @@ namespace RPGLootPolicy {
         const char *armor[] = { "Fortified", "Restorative", "Swift" };
         const unsigned index = std::min(2U, affix);
         return slot == Weapon ? weapon[index] : armor[index];
+    }
+    inline const char *ShortRarityName(unsigned rarity) {
+        const char *names[] = { "", "C", "R", "E", "L" };
+        return names[std::min(4U, rarity)];
+    }
+    inline std::string FormatRelic(unsigned slot, unsigned rarity, unsigned affix, unsigned power) {
+        if(!rarity) return "None";
+        std::ostringstream out;
+        out << RarityName(rarity) << " " << AffixName(slot, affix) << " +" << power;
+        return out.str();
     }
     inline void WeightedRemainder(unsigned remaining, const unsigned weights[6], unsigned extras[6]) {
         unsigned total = 0;

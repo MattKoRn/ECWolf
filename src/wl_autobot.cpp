@@ -313,7 +313,8 @@ namespace
 				spot->slideAmount[1] != 0xffff;
 			return AutobotPolicy::ThreatAwareCost(
 				closed, !!spot->thinker, spot->pushAmount != 0,
-				memory.deathDanger[to], memory.threat[to], pawn->health < 50);
+				memory.deathDanger[to], memory.threat[to],
+				AutobotPolicy::IsLowHealthPercent(pawn->health, pawn->maxhealth, 50));
 		}
 		APlayerPawn *pawn;
 		int width;
@@ -363,6 +364,30 @@ namespace
 		return delta <= tolerance && delta >= -tolerance;
 	}
 
+	unsigned int BestFirearmAmmo(APlayerPawn *pawn)
+	{
+		unsigned int best = 0;
+		player_t *player = pawn->player;
+		if(!player) return 0;
+		for(int slot = 0; slot < NUM_WEAPON_SLOTS; ++slot)
+		{
+			for(unsigned int i = 0; i < player->weapons.Slots[slot].Size(); ++i)
+			{
+				const ClassDef *type = player->weapons.Slots[slot].GetWeapon(i);
+				if(!type) continue;
+				AWeapon *weapon = static_cast<AWeapon *>(pawn->FindInventory(type));
+				if(!weapon || !weapon->IsKindOf(NATIVE_CLASS(Weapon)))
+					continue;
+				if(AutobotPolicy::IsMeleeWeapon(!!weapon->ammo[0], !!weapon->ammo[1],
+					weapon->ammouse[AWeapon::PrimaryFire]))
+					continue;
+				if(weapon->ammo[0] && static_cast<unsigned int>(weapon->ammo[0]->amount) > best)
+					best = static_cast<unsigned int>(weapon->ammo[0]->amount);
+			}
+		}
+		return best;
+	}
+
 	void Navigate(APlayerPawn *pawn, TicCmd_t &cmd)
 	{
 		const int w = static_cast<int>(memory.width);
@@ -404,6 +429,8 @@ namespace
 		}
 
 		Goal best;
+		const unsigned int ammo = BestFirearmAmmo(pawn);
+		const unsigned int localThreat = memory.threat[start];
 		// 0: keys; 1: survival; 2: exit; 3: switches; 4: hostiles;
 		// 5: stalled exit; 6: supplies; 7: frontier exploration.
 		for(AActor::Iterator actor = AActor::GetIterator().Next(); actor; actor.Next())
@@ -453,11 +480,6 @@ namespace
 			if(ammunition && !collectibleAmmo)
 				continue;
 
-			AWeapon *ready = pawn->player->ReadyWeapon;
-			AAmmo *readyAmmo = ready ? ready->ammo[0] : NULL;
-			const unsigned int ammo = readyAmmo ?
-				static_cast<unsigned int>(readyAmmo->amount) : 0;
-			const unsigned int localThreat = memory.threat[start];
 			const int urgency = AutobotPolicy::SupplyPriority(healing,
 				ammunition, pawn->health, pawn->maxhealth, ammo,
 				localThreat, failures.deaths);
@@ -864,7 +886,8 @@ namespace
 		// Don't waste bullets on targets beyond the useful firing distance.
 		const bool semiAuto = !!(weapon->weaponFlags & WF_NOAUTOFIRE);
 		cmd.buttonstate[bt_attack] = !semiAuto || (memory.ticks % 16 == 0);
-		const bool cautious = pawn->health < (failures.deaths >= 2 ? 70 : 45);
+		const bool cautious = AutobotPolicy::IsLowHealthPercent(
+			pawn->health, pawn->maxhealth, failures.deaths >= 2 ? 70 : 45);
 		cmd.controly = AutobotPolicy::RangedMovementSpeed(distanceTiles,
 			cautious, memory.threat[Index(pawn->tilex, pawn->tiley)]);
 
@@ -991,8 +1014,14 @@ const char *Bot_StatusLine()
 		memory.lastGoalPriority == 4 ? "enemy" :
 		memory.lastGoalPriority == 5 ? "exit prerequisite" :
 		memory.lastGoalPriority == 6 ? "supply" : "explore";
-	std::snprintf(status, sizeof(status), "AUTO %s | %s | %s",
-		BotEnabled ? "ON" : "OFF", memory.mapName[0] ? memory.mapName : "menu", goal);
+	if(BotEnabled && failures.deaths > 0)
+		std::snprintf(status, sizeof(status), "AUTO ON | %s | %s | D:%u%s",
+			memory.mapName[0] ? memory.mapName : "menu", goal,
+			failures.deaths, BotAllowEmergencyCheats ? " [C]" : "");
+	else
+		std::snprintf(status, sizeof(status), "AUTO %s | %s | %s%s",
+			BotEnabled ? "ON" : "OFF", memory.mapName[0] ? memory.mapName : "menu",
+			goal, BotAllowEmergencyCheats ? " [C]" : "");
 	return status;
 }
 

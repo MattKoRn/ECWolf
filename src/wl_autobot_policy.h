@@ -265,6 +265,13 @@ namespace AutobotPolicy
 		return 0;
 	}
 
+	inline bool IsLowHealthPercent(int health, int maxHealth, int thresholdPercent)
+	{
+		if(maxHealth <= 0) return health < thresholdPercent;
+		return static_cast<long long>(health) * 100 <
+			static_cast<long long>(maxHealth) * thresholdPercent;
+	}
+
 	inline bool ShouldShoot(double distanceTiles, bool melee)
 	{
 		// A little margin below engine melee range avoids whiffing.
