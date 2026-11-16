@@ -25,6 +25,9 @@ jobs:
           submodules: recursive
       - name: Autoplayer harness tests
         run: python -m unittest discover -s tests -p 'test_autoplayer_harness.py' -v
+      - name: User-supplied game data validation tests
+        shell: pwsh
+        run: ./tests/test-game-data-validation.ps1
       - name: Autoplayer policy regressions
         shell: pwsh
         run: |

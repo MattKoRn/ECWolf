@@ -8,6 +8,8 @@ struct TicCmd_t;
 extern bool BotEnabled;
 // False by default: normal unattended play never enables noclip or skips maps.
 extern bool BotAllowEmergencyCheats;
+// Revoking consent immediately restores the pre-emergency collision setting.
+void Bot_SetEmergencyCheats(bool enabled);
 const char *Bot_StatusLine();
 
 // Called once after normal input polling; never simulates OS key presses.

@@ -1007,21 +1007,29 @@ namespace
 const char *Bot_StatusLine()
 {
 	static char status[96];
-	const char *goal = memory.lastGoalPriority == 0 ? "key" :
+	const char *goal = !BotEnabled ? "manual" :
+		!memory.seenMap ? "waiting" :
+		memory.lastGoalPriority == 0 ? "key" :
 		memory.lastGoalPriority == 1 ? "supplies" :
 		memory.lastGoalPriority == 2 ? "exit" :
-		memory.lastGoalPriority == 3 ? "switch / secret" :
+		memory.lastGoalPriority == 3 ? "switch" :
 		memory.lastGoalPriority == 4 ? "enemy" :
-		memory.lastGoalPriority == 5 ? "exit prerequisite" :
+		memory.lastGoalPriority == 5 ? "prerequisite" :
 		memory.lastGoalPriority == 6 ? "supply" : "explore";
+	const char *recovery = AutobotPolicy::RecoveryHudLabel(
+		memory.usedEmergencyNoclip, memory.noGoalTicks, memory.detours,
+		memory.stuck);
+	char recoverySuffix[24] = "";
+	char deathSuffix[24] = "";
+	if(BotEnabled && *recovery)
+		std::snprintf(recoverySuffix, sizeof(recoverySuffix), " | %s", recovery);
 	if(BotEnabled && failures.deaths > 0)
-		std::snprintf(status, sizeof(status), "AUTO ON | %s | %s | D:%u%s",
-			memory.mapName[0] ? memory.mapName : "menu", goal,
-			failures.deaths, BotAllowEmergencyCheats ? " [C]" : "");
-	else
-		std::snprintf(status, sizeof(status), "AUTO %s | %s | %s%s",
-			BotEnabled ? "ON" : "OFF", memory.mapName[0] ? memory.mapName : "menu",
-			goal, BotAllowEmergencyCheats ? " [C]" : "");
+		std::snprintf(deathSuffix, sizeof(deathSuffix), " | D:%u", failures.deaths);
+	std::snprintf(status, sizeof(status), "AUTO %s | %s | %s%s%s%s",
+		BotEnabled ? "ON" : "OFF",
+		memory.mapName[0] ? memory.mapName : "menu", goal,
+		recoverySuffix, deathSuffix,
+		BotAllowEmergencyCheats ? " | CHEATS" : "");
 	return status;
 }
 
@@ -1092,6 +1100,20 @@ bool Bot_AdvanceEpisode()
 	return false;
 }
 
+void Bot_SetEmergencyCheats(bool enabled)
+{
+	if(AutobotPolicy::ShouldEndEmergencyNoclip(
+		memory.usedEmergencyNoclip, BotEnabled, enabled))
+	{
+		noclip = memory.originalNoclip;
+		memory.usedEmergencyNoclip = false;
+		memory.stuck = 0;
+		memory.detours = 0;
+		LogEvent("emergency_noclip_end", "cheats_disabled");
+	}
+	BotAllowEmergencyCheats = enabled;
+}
+
 void Bot_Update(TicCmd_t &cmd)
 {
 	static bool wasF12 = false;
@@ -1104,10 +1126,14 @@ void Bot_Update(TicCmd_t &cmd)
 	}
 	wasF12 = f12;
 
-	if(!BotEnabled && memory.usedEmergencyNoclip)
+	if(AutobotPolicy::ShouldEndEmergencyNoclip(
+		memory.usedEmergencyNoclip, BotEnabled, BotAllowEmergencyCheats))
 	{
 		noclip = memory.originalNoclip;
 		memory.usedEmergencyNoclip = false;
+		memory.stuck = 0;
+		memory.detours = 0;
+		LogEvent("emergency_noclip_end", "autoplayer_or_cheats_disabled");
 	}
 	if(!BotEnabled || !map || Net::InitVars.mode != Net::MODE_SinglePlayer ||
 		demoplayback || demorecord || Paused ||

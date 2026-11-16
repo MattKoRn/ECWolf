@@ -80,7 +80,7 @@ MENU_LISTENER(RPGHudToggle)
 }
 MENU_LISTENER(BotCheatToggle)
 {
-	BotAllowEmergencyCheats = !BotAllowEmergencyCheats;
+	Bot_SetEmergencyCheats(!BotAllowEmergencyCheats);
 	Message(BotAllowEmergencyCheats ? "Emergency cheats ON" : "Emergency cheats OFF");
 	IN_Ack(ACK_Local);
 	return true;

@@ -209,3 +209,24 @@ history.
 ## Campaign-focused navigation (next iteration)
 
 The planner now treats player-activated pushwalls as optional progression switches and can operate them from permitted sides. Aim tolerance adapts to distance and threat while retaining standard weapon selection and evasion. Cheat-free detours are the default: emergency noclip and level-skipping must be explicitly enabled via **Options → RPG Progression → Toggle Emergency Cheats** (off initially). This does **not** guarantee full campaign completion; unusual mod-specific puzzles and game-data playthroughs still require real-world testing. A compact HUD shows the current bot goal and RPG progress.
+
+## Reliability and honest completion reporting (iteration 1)
+
+Revoking **Emergency Cheats** in Options immediately restores the collision
+setting captured before an emergency noclip recovery. Switching off F12 also
+restores it. The compact HUD now identifies manual mode, no reachable route,
+detours, blocked motion and an active NOCLIP recovery, with **CHEATS** visible
+whenever emergency cheats are armed.
+
+The Wolf3D/Spear harness counts success only if a real map-start event comes
+**before** campaign completion. A run using scripted emergency map skipping
+reports `completed_with_skipped_maps`; a run using temporary emergency
+noclip reports `completed_with_emergency_noclip`. Both return a failing
+verification exit code. These results are useful diagnostics, not proof of
+cheat-free completion. The policy and harness have synthetic regression tests.
+
+The Windows one-click installer now validates optional user-provided game data
+*before compiling*: it requires a complete .WL1, .WL6 or .SOD game-data
+triple (GAMEMAPS, MAPHEAD, VSWAP) and copies only recognized game data
+extensions, never unrelated files. CI exercises validation using placeholder
+files, not copyrighted assets. See [RELEASE-CHECKLIST.md](RELEASE-CHECKLIST.md).

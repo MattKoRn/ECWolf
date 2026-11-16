@@ -39,6 +39,17 @@ def read_events(path):
             if part.startswith("event=")]
 
 
+def completion_observed(events):
+    """Accept completion only when a map started before the completion event."""
+    saw_map_start = False
+    for event in events:
+        if event == "map_start":
+            saw_map_start = True
+        elif event == "campaign_complete" and saw_map_start:
+            return True
+    return False
+
+
 def run_campaign(engine, campaign, data_dir, out_dir, seconds, start_map,
                  poll_seconds=1.0):
     ext, required = CAMPAIGNS[campaign]
@@ -71,7 +82,7 @@ def run_campaign(engine, campaign, data_dir, out_dir, seconds, start_map,
             while True:
                 exit_code = proc.poll()
                 events = read_events(telemetry)
-                if "campaign_complete" in events and "map_start" in events:
+                if completion_observed(events):
                     completed = True
                     break
                 if exit_code is not None:
@@ -100,6 +111,8 @@ def run_campaign(engine, campaign, data_dir, out_dir, seconds, start_map,
     # full campaign playthrough, even if the final episode eventually ends.
     if completed and counts.get("emergency_advance", 0):
         status = "completed_with_skipped_maps"
+    elif completed and counts.get("emergency_noclip", 0):
+        status = "completed_with_emergency_noclip"
     elif completed:
         status = "completed"
     elif timed_out:

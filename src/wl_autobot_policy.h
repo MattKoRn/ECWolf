@@ -61,6 +61,25 @@ namespace AutobotPolicy
 	}
 
 
+	// A revoked cheat opt-in must not leave the player walking through walls.
+	// This is checked both by the menu toggle and by the input loop.
+	inline bool ShouldEndEmergencyNoclip(bool active, bool botEnabled,
+		bool allowEmergencyCheats)
+	{
+		return active && (!botEnabled || !allowEmergencyCheats);
+	}
+
+	// Keep the compact HUD truthful about recovery without changing input.
+	inline const char *RecoveryHudLabel(bool noclipActive,
+		unsigned int noGoalTicks, unsigned int detours, int stuckTics)
+	{
+		if(noclipActive) return "NOCLIP";
+		if(noGoalTicks >= 70) return "NO ROUTE";
+		if(detours > 0) return "DETOUR";
+		if(stuckTics >= 70) return "BLOCKED";
+		return "";
+	}
+
 	// Allow four genuine pathfinding retries before resorting to noclip.
 	// The stalled timer resets after each detour, so the last-resort delay
 	// is measured AFTER the fourth failed route.

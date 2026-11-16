@@ -119,6 +119,24 @@ class HarnessTests(unittest.TestCase):
                                       self.root / "false-report", 3, "MAP01", 0.02)
         self.assertEqual(result["status"], "exited_incomplete")
 
+    def test_completion_events_must_follow_a_real_map_start(self):
+        self.assertFalse(HARNESS.completion_observed([]))
+        self.assertFalse(HARNESS.completion_observed(
+            ["campaign_complete", "map_start"]))
+        self.assertTrue(HARNESS.completion_observed(
+            ["map_start", "failure", "campaign_complete"]))
+
+    def test_emergency_noclip_is_not_cheat_free_completion(self):
+        stub = self.root / "noclip.py"
+        stub.write_text(
+            FAKE_SKIP_ENGINE.replace("event=emergency_advance",
+                                     "event=emergency_noclip"),
+            encoding="utf-8")
+        result = HARNESS.run_campaign(stub, "wolf3d", self.wolf,
+                                      self.root / "noclip-report", 3,
+                                      "MAP01", 0.02)
+        self.assertEqual(result["status"], "completed_with_emergency_noclip")
+
     def test_both_campaigns_start_concurrently(self):
         stub = self.root / "parallel.py"
         stub.write_text(FAKE_PARALLEL_ENGINE, encoding="utf-8")

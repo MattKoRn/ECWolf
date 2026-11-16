@@ -59,6 +59,17 @@ int main()
 	assert(!ShouldEmergencyAdvance(70 * 479, 10));
 	assert(!ShouldEmergencyAdvance(70 * 480, 3));
 	assert(ShouldEmergencyAdvance(70 * 480, 4));
+	// Revoked emergency-cheat consent must undo temporary noclip, without
+	// changing an untouched manual collision state.
+	assert(!ShouldEndEmergencyNoclip(false, false, false));
+	assert(!ShouldEndEmergencyNoclip(true, true, true));
+	assert(ShouldEndEmergencyNoclip(true, true, false));
+	assert(ShouldEndEmergencyNoclip(true, false, true));
+	assert(std::string(RecoveryHudLabel(true, 70, 2, 140)) == "NOCLIP");
+	assert(std::string(RecoveryHudLabel(false, 70, 2, 140)) == "NO ROUTE");
+	assert(std::string(RecoveryHudLabel(false, 0, 1, 0)) == "DETOUR");
+	assert(std::string(RecoveryHudLabel(false, 0, 0, 70)) == "BLOCKED");
+	assert(std::string(RecoveryHudLabel(false, 0, 0, 0)) == "");
 	assert(TravelCost(false, 0) == 10);
 	assert(TravelCost(true, 0) > TravelCost(false, 0));
 	assert(TravelCost(false, 2) > TravelCost(true, 0));

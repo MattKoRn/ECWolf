@@ -46,6 +46,15 @@ $repo = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 $build = Join-Path $repo "build\autoplayer-win64"
 $script:logDirectory = Join-Path $repo "build\autoplayer-logs"
 New-Item -ItemType Directory -Path $script:logDirectory -Force | Out-Null
+
+# Fail before a potentially expensive build if user-supplied game data is
+# incomplete. Never copy unrelated files from a personal directory.
+$gameFiles = @()
+if ($GameDataPath) {
+    . (Join-Path $PSScriptRoot "game-data-validation.ps1")
+    $gameFiles = @(Get-ECWolfGameDataFiles -Directory $GameDataPath)
+    Write-Host "Validated $($gameFiles.Count) user-supplied game data files."
+}
 if (-not $InstallRoot) {
     $InstallRoot = Join-Path $env:LOCALAPPDATA "Programs\ECWolf Autoplayer"
 }
@@ -207,6 +216,8 @@ Run-Checked "cmake" @("-S", (Join-Path $repo "tests"), "-B", $testBuild,
     "-G", $generator, "-A", "x64") -Stage "test-configure"
 Run-Checked "cmake" @("--build", $testBuild, "--config", "Release", "--parallel") -Stage "test-build"
 Run-Checked "ctest" @("--test-dir", $testBuild, "-C", "Release", "--output-on-failure") -Stage "test-run"
+Write-Host "=== Checking installer game-data safeguards ==="
+& (Join-Path $repo "tests\test-game-data-validation.ps1")
 
 Write-Host "=== Incremental compilation (only changed sources and dependencies) ==="
 # No --clean-first: the build tool recompiles changed sources and affected dependencies.
@@ -214,14 +225,11 @@ Run-Checked "cmake" @("--build", $build, "--config", "Release", "--parallel") -S
 Write-Host "=== Installing to $InstallRoot ==="
 Run-Checked "cmake" @("--install", $build, "--config", "Release", "--prefix", $InstallRoot) -Stage "install"
 
-# Commercial game data is never bundled; optionally copy the user's own data.
+# Only files passing the pre-build licensed-data preflight are copied.
 if ($GameDataPath) {
-    if (-not (Test-Path $GameDataPath -PathType Container)) {
-        throw "Game data directory does not exist: $GameDataPath"
+    foreach ($gameFile in $gameFiles) {
+        Copy-Item -LiteralPath $gameFile.FullName -Destination $InstallRoot -Force
     }
-    Get-ChildItem -LiteralPath $GameDataPath -File |
-        Where-Object { $_.Extension -match '^\.(WL1|WL6|SOD|SD1|SD2|SD3|SD4|N3D)$' } |
-        Copy-Item -Destination $InstallRoot -Force
 }
 
 $exe = Join-Path $InstallRoot "ecwolf.exe"
