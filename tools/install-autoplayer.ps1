@@ -98,122 +98,7 @@ function Reset-IncompatibleCMakeBuild {
 
     $cached = @{}
     foreach ($line in Get-Content -LiteralPath $cache) {
-        if ($line -match '^([^/#][^:]*):[^=]+=(.*) Skip the
-# configure pass for matching settings; the generated ZERO_CHECK target still
-# regenerates when the project's CMake files change.
-$cachePath = Join-Path $build "CMakeCache.txt"
-$solutionPath = Join-Path $build "ECWolf.sln"
-$needsConfigure = $true
-if (-not $Reconfigure -and (Test-Path -LiteralPath $cachePath) -and (Test-Path -LiteralPath $solutionPath)) {
-    $cacheValues = @{}
-    foreach ($line in Get-Content -LiteralPath $cachePath) {
         if ($line -match '^([^/#][^:]*):[^=]+=(.*)$') {
-            $cacheValues[$Matches[1]] = $Matches[2]
-        }
-    }
-
-    $expectedValues = @{
-        "CMAKE_GENERATOR"           = $generator
-        "CMAKE_GENERATOR_PLATFORM"  = "x64"
-        "CMAKE_HOME_DIRECTORY"      = $repo
-        "CMAKE_INSTALL_PREFIX"      = $InstallRoot
-        "INTERNAL_ZLIB"             = "ON"
-        "INTERNAL_BZIP2"            = "ON"
-        "INTERNAL_JPEG"             = "ON"
-        "INTERNAL_SDL"              = "ON"
-        "INTERNAL_SDL_MIXER"        = "ON"
-        "INTERNAL_SDL_NET"          = "ON"
-        "INTERNAL_SDL_MIXER_CODECS" = "ON"
-    }
-
-    $needsConfigure = $false
-    foreach ($name in $expectedValues.Keys) {
-        if (-not $cacheValues.ContainsKey($name)) {
-            $needsConfigure = $true
-            break
-        }
-        $actual = $cacheValues[$name]
-        $expected = $expectedValues[$name]
-        if ($name -eq "CMAKE_HOME_DIRECTORY" -or $name -eq "CMAKE_INSTALL_PREFIX") {
-            $actual = $actual.Replace('\', '/').TrimEnd('/')
-            $expected = $expected.Replace('\', '/').TrimEnd('/')
-        }
-        if ($actual -ine $expected) {
-            $needsConfigure = $true
-            break
-        }
-    }
-    if ($cacheValues.ContainsKey("CMAKE_SUPPRESS_REGENERATION") -and $cacheValues["CMAKE_SUPPRESS_REGENERATION"] -eq "ON") {
-        $needsConfigure = $true
-    }
-}
-
-if ($needsConfigure) {
-    Write-Host "=== Configuring with $generator ==="
-    Run-Checked "cmake" @(
-        "-S", $repo, "-B", $build, "-G", $generator, "-A", "x64",
-        "-DCMAKE_INSTALL_PREFIX=$InstallRoot",
-        "-DINTERNAL_ZLIB=ON", "-DINTERNAL_BZIP2=ON", "-DINTERNAL_JPEG=ON",
-        "-DINTERNAL_SDL=ON", "-DINTERNAL_SDL_MIXER=ON", "-DINTERNAL_SDL_NET=ON",
-        # Use bundled codecs instead of requiring a system OpusFile installation.
-        "-DINTERNAL_SDL_MIXER_CODECS=ON"
-    ) -Stage "configure"
-}
-else {
-    Write-Host "=== Reusing existing CMake configuration ==="
-}
-
-Write-Host "=== Running fast native autoplayer + RPG regression tests ==="
-$testBuild = Join-Path $repo "build\autoplayer-policy-win64"
-Reset-IncompatibleCMakeBuild -BuildDirectory $testBuild -SourceDirectory (Join-Path $repo "tests") -ExpectedGenerator $generator
-Run-Checked "cmake" @("-S", (Join-Path $repo "tests"), "-B", $testBuild,
-    "-G", $generator, "-A", "x64") -Stage "test-configure"
-Run-Checked "cmake" @("--build", $testBuild, "--config", "Release", "--parallel") -Stage "test-build"
-Run-Checked "ctest" @("--test-dir", $testBuild, "-C", "Release", "--output-on-failure") -Stage "test-run"
-
-Write-Host "=== Incremental compilation (only changed sources and dependencies) ==="
-# No --clean-first: the build tool recompiles changed sources and affected dependencies.
-Run-Checked "cmake" @("--build", $build, "--config", "Release", "--parallel") -Stage "build"
-Write-Host "=== Installing to $InstallRoot ==="
-Run-Checked "cmake" @("--install", $build, "--config", "Release", "--prefix", $InstallRoot) -Stage "install"
-
-# Commercial game data is never bundled; optionally copy the user's own data.
-if ($GameDataPath) {
-    if (-not (Test-Path $GameDataPath -PathType Container)) {
-        throw "Game data directory does not exist: $GameDataPath"
-    }
-    Get-ChildItem -LiteralPath $GameDataPath -File |
-        Where-Object { $_.Extension -match '^\.(WL1|WL6|SOD|SD1|SD2|SD3|SD4|N3D)$' } |
-        Copy-Item -Destination $InstallRoot -Force
-}
-
-$exe = Join-Path $InstallRoot "ecwolf.exe"
-if (-not (Test-Path $exe)) {
-    $found = Get-ChildItem -Path $InstallRoot -Filter "ecwolf.exe" -File -Recurse | Select-Object -First 1
-    if (-not $found) {
-        throw "Build succeeded, but ecwolf.exe was not found under $InstallRoot."
-    }
-    $exe = $found.FullName
-}
-
-$desktop = [Environment]::GetFolderPath("DesktopDirectory")
-if (-not $desktop) {
-    throw "Unable to locate the Windows desktop folder."
-}
-$shell = New-Object -ComObject WScript.Shell
-$shortcut = $shell.CreateShortcut((Join-Path $desktop "$ShortcutName.lnk"))
-$shortcut.TargetPath = $exe
-$shortcut.WorkingDirectory = Split-Path $exe -Parent
-$shortcut.IconLocation = "$exe,0"
-$shortcut.Description = $ShortcutDescription
-$shortcut.Save()
-
-Write-Host ""
-Write-Host "Installation complete: $exe" -ForegroundColor Green
-Write-Host "Desktop shortcut: $ShortcutName.lnk"
-Write-Host "Launch ECWolf with your legally owned Wolf3D/Spear game data."
-Write-Host "In a running single-player level, press F12 or enable Autoplayer in Controls."
-) {
             $cached[$Matches[1]] = $Matches[2]
         }
     }
@@ -317,6 +202,7 @@ else {
 
 Write-Host "=== Running fast native autoplayer + RPG regression tests ==="
 $testBuild = Join-Path $repo "build\autoplayer-policy-win64"
+Reset-IncompatibleCMakeBuild -BuildDirectory $testBuild -SourceDirectory (Join-Path $repo "tests") -ExpectedGenerator $generator
 Run-Checked "cmake" @("-S", (Join-Path $repo "tests"), "-B", $testBuild,
     "-G", $generator, "-A", "x64") -Stage "test-configure"
 Run-Checked "cmake" @("--build", $testBuild, "--config", "Release", "--parallel") -Stage "test-build"
