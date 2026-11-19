@@ -7,6 +7,7 @@
 #include "tmemory.h"
 #include "wl_main.h"
 #include "v_font.h"
+#include <string>
 
 extern	int             pa,px,py;
 
@@ -57,6 +58,8 @@ template<class T> void MenuToRealCoords(T &x, T &y, T &w, T &h, MenuOffset offse
 
 void VWB_DrawPropString(FFont *font, const char *string, EColorRange translation=CR_UNTRANSLATED, bool stencil=false, BYTE stencilcolor=0);
 void VWB_DrawPropStringWrap(unsigned int wrapWidth, unsigned int wrapHeight, FFont *font, const char *string, EColorRange translation=CR_UNTRANSLATED, bool stencil=false, BYTE stencilcolor=0);
+std::string V_FitTextToWidth(FFont *font, const char *text, int maxWidth);
+std::string V_WrapTextToBox(FFont *font, const char *text, int maxWidth, int maxLines);
 
 void VH_UpdateScreen();
 #define VW_UpdateScreen VH_UpdateScreen

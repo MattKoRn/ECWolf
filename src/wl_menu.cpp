@@ -39,6 +39,8 @@
 #include "am_map.h"
 
 #include <climits>
+#include <algorithm>
+#include <string>
 
 static int	lastgamemusicoffset;
 static FName playerClass = NAME_None;
@@ -1186,18 +1188,22 @@ void Message (const char *string)
 
 	word width, height;
 
+	// Wrap the message inside the game-sized window, reserving cursor space.
+	const int maxWidth=320-20-BigFont->GetCharWidth('_');
+	const int maxLines=std::max(1,(200-20)/BigFont->GetHeight());
+	const std::string fitted=V_WrapTextToBox(BigFont,string,maxWidth,maxLines);
 	FString measureString;
-	measureString.Format("%s_", string);
-	VW_MeasurePropString(BigFont, measureString, width, height);
-	width = MIN<int>(width, 320 - 10);
-	height = MIN<int>(height, 200 - 10);
+	measureString.Format("%s_",fitted.c_str());
+	VW_MeasurePropString(BigFont,measureString,width,height);
+	width=MIN<int>(width,320-10);
+	height=MIN<int>(height,200-10);
 
 	PrintY = (WindowH / 2) - height / 2;
 	PrintX = WindowX = 160 - width / 2;
 
 	DrawWindow (WindowX - 5, PrintY - 5, width + 10, height + 10, MESSAGE_BG);
 	DrawOutline (WindowX - 5, PrintY - 5, width + 10, height + 10, BOTBRDR, TOPBRDR);
-	US_Print (BigFont, string, gameinfo.FontColors[GameInfo::MESSAGEFONT]);
+	US_Print (BigFont,fitted.c_str(),gameinfo.FontColors[GameInfo::MESSAGEFONT]);
 	VW_UpdateScreen ();
 }
 

@@ -11,6 +11,8 @@
 #include "g_mapinfo.h"
 #include "v_palette.h"
 #include "colormatcher.h"
+#include <algorithm>
+#include <cstring>
 
 bool 			Menu::close = false;
 FTexture		*Menu::cursor = NULL;
@@ -45,7 +47,9 @@ void MenuItem::draw()
 	if(picture)
 		VWB_DrawGraphic(picture, pictureX == -1 ? menu->getX() + 32 : pictureX, pictureY == -1 ? PrintY : pictureY, MENU_CENTER);
 
-	US_Print(BigFont, getString(), getTextColor());
+	const int right = std::min(316,menu->getX()+menu->getWidth()-4);
+	const std::string fitted = V_FitTextToWidth(BigFont,getString(),std::max(0,right-int(PrintX)));
+	US_Print(BigFont,fitted.c_str(),getTextColor());
 	PrintX = menu->getX() + menu->getIndent();
 }
 
@@ -64,14 +68,10 @@ void MenuItem::setPicture(const char* picture, int x, int y)
 void MenuItem::setText(const char string[80])
 {
 	height = 13;
-	strcpy(this->string, string);
-	for(unsigned int i = 0;i < 80;i++)
-	{
-		if(string[i] == '\n')
-			height += 13;
-		else if(string[i] == '\0')
-			break;
-	}
+	std::strncpy(this->string,string ? string : "",sizeof(this->string)-1);
+	this->string[sizeof(this->string)-1]='\0';
+	for(unsigned int i=0;this->string[i];++i)
+		if(this->string[i]=='\n') height += 13;
 }
 
 LabelMenuItem::LabelMenuItem(const char string[36]) : MenuItem(string)
@@ -83,11 +83,14 @@ void LabelMenuItem::draw()
 {
 	int oldWindowX = WindowX;
 	int oldWindowY = WindowY;
+	int oldWindowW = WindowW;
 	WindowX = menu->getX();
-	WindowW = menu->getWidth();
-	US_CPrint(BigFont, string, gameinfo.FontColors[GameInfo::MENU_TITLE]);
+	WindowW = std::min(menu->getWidth(),320-WindowX);
+	const std::string fitted=V_FitTextToWidth(BigFont,string,std::max(0,WindowW-8));
+	US_CPrint(BigFont,fitted.c_str(),gameinfo.FontColors[GameInfo::MENU_TITLE]);
 	WindowX = oldWindowX;
 	WindowY = oldWindowY;
+	WindowW = oldWindowW;
 }
 
 BooleanMenuItem::BooleanMenuItem(const char string[36], bool &value, MENU_LISTENER_PROTOTYPE(activateListener)) : MenuItem(string, activateListener), value(value)
@@ -131,33 +134,27 @@ void MenuSwitcherMenuItem::activate()
 
 SliderMenuItem::SliderMenuItem(int &value, int width, int max, const char begString[36], const char endString[36], MENU_LISTENER_PROTOTYPE(activateListener)) : MenuItem(endString, activateListener), value(value), width(width), max(max)
 {
-	strcpy(this->begString, begString);
+	std::strncpy(this->begString,begString ? begString : "",sizeof(this->begString)-1);
+	this->begString[sizeof(this->begString)-1]='\0';
 }
 
 void SliderMenuItem::draw()
 {
-	US_Print(BigFont, begString, getTextColor());
+	const int right=std::min(316,menu->getX()+menu->getWidth()-4);
+	const int available=std::max(0,right-int(PrintX));
+	const int sliderWidth=std::min(width,std::max(20,available/2));
+	const int beginWidth=std::max(0,(available-sliderWidth-16)/2);
+	const std::string begin=V_FitTextToWidth(BigFont,begString,beginWidth);
+	US_Print(BigFont,begin.c_str(),getTextColor());
 	PrintX += 8;
-
-	unsigned int bx = PrintX, by = PrintY+1, bw = width, bh = 10;
-	MenuToRealCoords(bx, by, bw, bh, MENU_CENTER);
-
-	DrawWindow(PrintX, PrintY+1, width, 10, MENUWIN_BACKGROUND, MENUWIN_BOTBORDER, MENUWIN_TOPBORDER);
-
-	//calc position
-	int x = int(ceil((double(width-20)/double(max))*double(value)));
-	x -= x+20 >= width ? 1 : 0;
-
-	bx = PrintX + x;
-	by = PrintY + 1;
-	bw = 20;
-	bh = 10;
-	MenuToRealCoords(bx, by, bw, bh, MENU_CENTER);
-
-	DrawWindow(PrintX + x, PrintY + 1, 20, 10, MENUWINHGLT_BACKGROUND, MENUWINHGLT_BOTBORDER, MENUWINHGLT_TOPBORDER);
-
-	PrintX += width+8;
-	MenuItem::draw();
+	DrawWindow(PrintX,PrintY+1,sliderWidth,10,MENUWIN_BACKGROUND,MENUWIN_BOTBORDER,MENUWIN_TOPBORDER);
+	const int x=std::max(0,std::min(sliderWidth-20,
+		int(ceil(double(sliderWidth-20)/double(max)*double(value)))));
+	DrawWindow(PrintX+x,PrintY+1,20,10,MENUWINHGLT_BACKGROUND,MENUWINHGLT_BOTBORDER,MENUWINHGLT_TOPBORDER);
+	PrintX += sliderWidth+8;
+	const std::string end=V_FitTextToWidth(BigFont,getString(),std::max(0,right-int(PrintX)));
+	US_Print(BigFont,end.c_str(),getTextColor());
+	PrintX=menu->getX()+menu->getIndent();
 }
 
 void SliderMenuItem::left()
@@ -223,7 +220,9 @@ void MultipleChoiceMenuItem::activate()
 
 void MultipleChoiceMenuItem::draw()
 {
-	DrawWindow(PrintX, PrintY, menu->getWidth()-menu->getIndent()-menu->getX(), BigFont->GetHeight(), BKGDCOLOR, BKGDCOLOR, BKGDCOLOR);
+	DrawWindow(PrintX,PrintY,
+		std::max(0,std::min(316,menu->getX()+menu->getWidth()-4)-int(PrintX)),
+		BigFont->GetHeight(),BKGDCOLOR,BKGDCOLOR,BKGDCOLOR);
 	MenuItem::draw();
 }
 
@@ -296,7 +295,9 @@ void TextInputMenuItem::draw()
 	DrawWindow(menu->getX() + menu->getIndent(), PrintY, menu->getWidth() - menu->getIndent() - 12, 11, BKGDCOLOR, color, color);
 	PrintX = menu->getX() + menu->getIndent() + 2;
 	PrintY += 1 + (5-SmallFont->GetHeight()/2);
-	US_Print(SmallFont, getValue(), getTextColor());
+	const int right=std::min(316,menu->getX()+menu->getWidth()-14);
+	const std::string fitted=V_FitTextToWidth(SmallFont,getValue(),std::max(0,right-int(PrintX)));
+	US_Print(SmallFont,fitted.c_str(),getTextColor());
 }
 
 int ControlMenuItem::column = 0;
@@ -488,14 +489,15 @@ void ControlMenuItem::draw()
 	if(isSelected())
 		DrawWindow(160 + (52*column), PrintY + 1, 50 - 2, 11, MENUWIN_BACKGROUND, MENUWIN_BOTBORDER, MENUWIN_TOPBORDER);
 
-	US_Print(BigFont, getString(), getTextColor());
+	const std::string label=V_FitTextToWidth(BigFont,getString(),std::max(0,155-int(PrintX)));
+	US_Print(BigFont,label.c_str(),getTextColor());
 
 	const int key = SDL2Backconvert(button.keyboard);
 
 	if(button.keyboard >= 0 && button.keyboard < 512 && KeyNames[key])
 	{
 		PrintX = 162;
-		US_Print(BigFont, KeyNames[key], getTextColor());
+		US_Print(BigFont,V_FitTextToWidth(BigFont,KeyNames[key],47).c_str(),getTextColor());
 	}
 	if(button.mouse != -1)
 	{
@@ -505,7 +507,7 @@ void ControlMenuItem::draw()
 			btn = MWheelNames[button.mouse - ControlScheme::MWheel_Left];
 		else
 			btn.Format("MS%d", button.mouse);
-		US_Print(BigFont, btn, getTextColor());
+		US_Print(BigFont,V_FitTextToWidth(BigFont,btn.GetChars(),47).c_str(),getTextColor());
 	}
 	if(button.joystick != -1)
 	{
@@ -515,7 +517,7 @@ void ControlMenuItem::draw()
 			btn.Format("JY%d", button.joystick);
 		else
 			btn.Format("A%d%c", (button.joystick-32)/2, (button.joystick&1) ? 'D' : 'U');
-		US_Print(BigFont, btn, getTextColor());
+		US_Print(BigFont,V_FitTextToWidth(BigFont,btn.GetChars(),47).c_str(),getTextColor());
 	}
 
 	PrintX = menu->getX() + menu->getIndent();
@@ -741,7 +743,7 @@ void Menu::draw() const
 		if(headPictureIsAlternate && headPicture)
 			VWB_DrawGraphic(headPicture, 160-headPicture->GetScaledWidth()/2, PrintY, MENU_CENTER);
 		else
-			US_CPrint(BigFont, headText, gameinfo.FontColors[GameInfo::MENU_TITLE]);
+			US_CPrint(BigFont,V_FitTextToWidth(BigFont,headText,310).c_str(),gameinfo.FontColors[GameInfo::MENU_TITLE]);
 	}
 
 	if(MenuStyle != MENUSTYLE_Blake)
@@ -1085,7 +1087,8 @@ void Menu::setHeadPicture(const char* picture, bool isAlt)
 
 void Menu::setHeadText(const char text[36], bool drawInStripes)
 {
-	strcpy(headText, text);
+	std::strncpy(headText,text ? text : "",sizeof(headText)-1);
+	headText[sizeof(headText)-1]='\0';
 	headTextInStripes = drawInStripes;
 }
 

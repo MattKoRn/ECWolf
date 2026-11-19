@@ -29,6 +29,7 @@
 #include "g_mapinfo.h"
 #include "a_inventory.h"
 #include "am_map.h"
+#include <string>
 
 /*
 =============================================================================
@@ -1028,17 +1029,19 @@ void PlayFrame()
 	if(RPG::HudEnabled() && Net::InitVars.mode == Net::MODE_SinglePlayer)
 	{
 		const char *lines[2] = { Bot_StatusLine(), RPG::HudLine() };
+		const int hudLineSpacing=ConFont->GetHeight()+3;
 		for(int i = 0; i < 2; ++i)
 		{
-			word x = 0, y = static_cast<word>(fpscounter ? 12 + i * 12 : i * 12);
-			word width = 0, height = 0;
-			VW_MeasurePropString(ConFont, lines[i], width, height);
-			MenuToRealCoords(x, y, width, height, MENU_TOP);
-			VWB_Clear(GPalette.BlackIndex, x, y, x + width + 1, y + height + 1);
-			px = 0;
-			py = static_cast<word>(fpscounter ? 12 + i * 12 : i * 12);
-			pa = MENU_TOP;
-			VWB_DrawPropString(ConFont, lines[i], CR_WHITE);
+			const std::string fitted=V_FitTextToWidth(ConFont,lines[i],314);
+			word x=0,y=static_cast<word>((fpscounter ? 12 : 0)+i*hudLineSpacing);
+			word width=0,height=0;
+			VW_MeasurePropString(ConFont,fitted.c_str(),width,height);
+			MenuToRealCoords(x,y,width,height,MENU_TOP);
+			VWB_Clear(GPalette.BlackIndex,x,y,x+width+1,y+height+1);
+			px=0;
+			py=static_cast<word>((fpscounter ? 12 : 0)+i*hudLineSpacing);
+			pa=MENU_TOP;
+			VWB_DrawPropString(ConFont,fitted.c_str(),CR_WHITE);
 		}
 		pa = MENU_CENTER;
 	}

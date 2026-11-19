@@ -1027,7 +1027,7 @@ const char *Bot_StatusLine()
 		std::snprintf(deathSuffix, sizeof(deathSuffix), " | D:%u", failures.deaths);
 	std::snprintf(status, sizeof(status), "AUTO %s | %s | %s%s%s%s",
 		BotEnabled ? "ON" : "OFF",
-		memory.mapName[0] ? memory.mapName : "menu", goal,
+		goal, memory.mapName[0] ? memory.mapName : "menu",
 		recoverySuffix, deathSuffix,
 		BotAllowEmergencyCheats ? " | CHEATS" : "");
 	return status;

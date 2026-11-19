@@ -12,8 +12,32 @@
 #include "r_data/r_translate.h"
 #include "textures/textures.h"
 #include "templates.h"
+#include "ui_text_layout.h"
 
 int	    pa=MENU_CENTER,px,py;
+
+// Use the same glyph advances as VWB_DrawPropString.
+static int PropTextWidth(FFont *font, const std::string &text)
+{
+	int width=0;
+	for(size_t i=0;i<text.size();++i)
+		width += font->GetCharWidth(static_cast<unsigned char>(text[i]));
+	return width;
+}
+
+std::string V_FitTextToWidth(FFont *font, const char *text, int maxWidth)
+{
+	if(!font || !text) return "";
+	return UITextLayout::FitLines(text,maxWidth,
+		[font](const std::string &line) { return PropTextWidth(font,line); });
+}
+
+std::string V_WrapTextToBox(FFont *font, const char *text, int maxWidth, int maxLines)
+{
+	if(!font || !text) return "";
+	return UITextLayout::Wrap(text,maxWidth,maxLines,
+		[font](const std::string &line) { return PropTextWidth(font,line); });
+}
 
 //==========================================================================
 
